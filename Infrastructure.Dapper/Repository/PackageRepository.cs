@@ -1,6 +1,4 @@
 ﻿using Dapper;
-using Infrastructure.Dapper.Abstractions;
-using Poc.Synchronisation.Domain.Models;
 
 namespace Infrastructure.Dapper.Repository;
 
@@ -72,7 +70,7 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory) : IBase
         const string sql = "DELETE FROM Packages WHERE Id = @Id;";
 
         using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new { Id = id.ToString() });
+        var affected = await connection.ExecuteAsync(sql, new { Id = id });
 
         return affected > 0;
     }
@@ -96,7 +94,7 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory) : IBase
                 }
                 return package;
             },
-            splitOn: "Id"
+            splitOn: "LocationId"
         );
 
         return packages;
@@ -122,8 +120,8 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory) : IBase
                 }
                 return package;
             },
-            new { Id = id.ToString() },
-            splitOn: "Id"
+            new { Id = id },
+            splitOn: "LocationId"
         );
 
         return packages.FirstOrDefault();
@@ -148,7 +146,7 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory) : IBase
                 }
                 return package;
             },
-            splitOn: "Id"
+            splitOn: "LocationId"
         ).AsQueryable();
 
         return packages;
@@ -161,19 +159,31 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory) : IBase
             SET Reference = @Reference, 
                 Weight = @Weight, 
                 Volume = @Volume, 
+                TareWeight = @TareWeight
+            WHERE Id = @Id;";
+
+        const string sqlWithoutLocation = @"
+            UPDATE Packages
+            SET Reference = @Reference, 
+                Weight = @Weight, 
+                Volume = @Volume, 
                 TareWeight = @TareWeight,
                 LocationId = @LocationId
             WHERE Id = @Id;";
 
+
+        var LocationId = entity.LocationId?.ToString() ?? null;
+        var query = LocationId is null ? sql : sqlWithoutLocation;
+
         using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new
+        var affected = await connection.ExecuteAsync(query, new
         {
             entity.Id,
             entity.Reference,
             entity.Weight,
             entity.Volume,
             entity.TareWeight,
-            LocationId = entity.Location?.Id
+            LocationId
         });
 
         return affected > 0;

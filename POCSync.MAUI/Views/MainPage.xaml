@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:model="clr-namespace:Poc.Synchronisation.Domain.Models;assembly=Poc.Synchronisation.Domain"
+             xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
+             x:DataType="viewmodel:PackageListViewModel"
+             x:Class="POCSync.MAUI.Views.MainPage">
+
+
+    <Grid
+        ColumnDefinitions="*,*"
+        ColumnSpacing="5"
+        RowDefinitions="*,Auto"
+        RowSpacing="0">
+
+        <RefreshView 
+            Grid.ColumnSpan="2"
+            Command="{Binding LoadPackagesCommand}" 
+            IsRefreshing="{Binding IsBusy}">
+            <CollectionView 
+                ItemsSource="{Binding Packages}"
+                SelectionMode="None"
+                EmptyView="No packages found">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:Package">
+                        <SwipeView>
+                            <SwipeView.LeftItems>
+                                <SwipeItems>
+                                    <SwipeItem Text="Edit"
+                                              BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource Primary}}"
+                                              Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:PackageListViewModel}}, Path=EditPackageCommand}"
+                                              CommandParameter="{Binding .}" />
+                                </SwipeItems>
+                            </SwipeView.LeftItems>
+                            <SwipeView.RightItems>
+                                <SwipeItems>
+                                    <SwipeItem Text="Delete"
+                                              BackgroundColor="Red"
+                                              Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:PackageListViewModel}}, Path=DeletePackageCommand}"
+                                              CommandParameter="{Binding .}" />
+                                </SwipeItems>
+                            </SwipeView.RightItems>
+
+                            <Grid Padding="10">
+                                <Border HeightRequest="125" 
+                                       StrokeThickness="1" 
+                                       StrokeShape="RoundRectangle 8,8,8,8"
+                                       Stroke="{AppThemeBinding Light=LightGray, Dark=DimGray}">
+                                    <Grid Padding="0" ColumnDefinitions="125,*">
+                                        <VerticalStackLayout
+                                            VerticalOptions="Center"
+                                            Grid.Column="1"
+                                            Padding="10">
+                                            <Label Style="{StaticResource LargeLabel}" Text="{Binding Reference}" />
+                                            <Label Style="{StaticResource MediumLabel}" 
+                                                  Text="{Binding Weight, StringFormat='Weight: {0:F2} kg'}"
+                                                  IsVisible="{Binding Weight, Converter={StaticResource NotNullConverter}}" />
+                                            <Label Style="{StaticResource MediumLabel}" 
+                                                  Text="{Binding Volume, StringFormat='Volume: {0:F2} m³'}"
+                                                  IsVisible="{Binding Volume, Converter={StaticResource NotNullConverter}}" />
+                                            <Label Style="{StaticResource MediumLabel}" 
+                                                  Text="{Binding TareWeight, StringFormat='Tare: {0:F2} kg'}"
+                                                  IsVisible="{Binding TareWeight, Converter={StaticResource NotNullConverter}}" />
+                                            <Label Style="{StaticResource MediumLabel}" 
+                                                  Text="{Binding CreatedAt, StringFormat='Created: {0:MM/dd/yyyy}'}" />
+                                        </VerticalStackLayout>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </SwipeView>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </RefreshView>
+
+        <Button Text="Refresh" 
+                Command="{Binding LoadPackagesCommand}"
+                IsEnabled="{Binding IsNotBusy}"
+                Grid.Row="1"
+                Grid.Column="0"
+                Margin="8"/>
+
+        <Button Text="Add" 
+                Command="{Binding GotToGreateCommand}"
+                IsEnabled="{Binding IsNotBusy}"
+                Grid.Row="1"
+                Grid.Column="1"
+                Margin="8"/>
+    </Grid>
+
+</ContentPage>

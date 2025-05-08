@@ -1,7 +1,13 @@
-﻿using Infrastructure.Dapper;
+﻿using Dapper;
+using Infrastructure.Dapper;
+using Infrastructure.Dapper.TypeHandlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Application;
+using POCSync.MAUI.Services;
+using POCSync.MAUI.Services.Abstractions;
+using POCSync.MAUI.ViewModels;
+using POCSync.MAUI.Views;
 
 namespace POCSync.MAUI
 {
@@ -25,14 +31,37 @@ namespace POCSync.MAUI
 
             var dbName = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
             var dbPwd = builder.Configuration["DbPwd"] ?? string.Empty;
+            var apiUrl = builder.Configuration["ApiUrl"] ?? string.Empty;
 
 
             builder.Services
                 .AddApplication();
-            var dbPath = Path.Combine(FileSystem.AppDataDirectory, dbName);
-            var _ = builder.Services.AddInfrastructure(dbPath, dbPwd).GetAwaiter().GetResult();
 
-            builder.Services.AddTransient<MainPage>();
+            string dbPath;
+            dbPath = Path.Combine(FileSystem.AppDataDirectory, dbName); // fallback
+#if ANDROID
+            string downloadsDir = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDocuments)?.AbsolutePath ?? FileSystem.AppDataDirectory;
+            dbPath = Path.Combine(downloadsDir, dbName);
+#else
+            dbPath = Path.Combine(FileSystem.AppDataDirectory, dbName); // fallback
+#endif
+
+
+
+            var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
+
+
+            builder.Services.AddTransient<PackageListViewModel>();
+
+            builder.Services.AddTransient<SynchronisationViewModel>();
+            builder.Services.AddTransient<SynchronisationPage>();
+
+            builder.Services.AddTransient<PackageFormViewModel>();
+            builder.Services.AddTransient<PackageFormPage>();
+
+            builder.Services.AddScoped<IPackageService, PackageService>();
+
+            SqlMapper.AddTypeHandler(new SqliteGuidTypeHandler());
 
             return builder.Build();
         }

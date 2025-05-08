@@ -1,12 +1,13 @@
 ﻿using Dapper;
 using Infrastructure.Dapper.Abstractions;
 using Poc.Synchronisation.Domain;
+using Poc.Synchronisation.Domain.Events.Packages;
 
 namespace Infrastructure.Dapper.Repository;
 
-public class StoredEventRepository : IBaserepositoryWithInitialisation<StoredEvent, Guid>
+public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) : IBaserepositoryWithInitialisation<StoredEvent, Guid>
 {
-    private readonly IDbConnectionFactory _dbConnectionFactory;
+    private readonly IDbConnectionFactory _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
 
     public async Task InitializeAsync()
     {
@@ -35,11 +36,6 @@ public class StoredEventRepository : IBaserepositoryWithInitialisation<StoredEve
         var result = await connection.ExecuteAsync(sql);
     }
 
-    public StoredEventRepository(IDbConnectionFactory dbConnectionFactory)
-    {
-        _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
-    }
-
     public async Task<bool> AddAsync(StoredEvent entity, CancellationToken cancellationToken = default)
     {
         // Ensure we have a valid ID
@@ -47,6 +43,9 @@ public class StoredEventRepository : IBaserepositoryWithInitialisation<StoredEve
         {
             entity.EventId = Guid.NewGuid();
         }
+        entity.MobileEventId = Guid.NewGuid();
+        entity.EventStatus = EventType.Idle;
+        entity.EmitedOn = DateTime.UtcNow;
 
         // Set SavedOn to current UTC time
         entity.SavedOn = DateTime.UtcNow;

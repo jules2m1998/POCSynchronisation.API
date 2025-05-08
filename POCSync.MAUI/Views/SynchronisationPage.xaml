@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="POCSync.MAUI.Views.SynchronisationPage"
+             xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
+             x:DataType="viewmodel:SynchronisationViewModel"
+             Title="SynchronisationPage">
+    <VerticalStackLayout Spacing="10" Padding="20">
+        <Label 
+            Text="{Binding ProgressMessage}" 
+            FontSize="16"
+            FontAttributes="Bold"
+            HorizontalOptions="Start"
+            IsVisible="{Binding IsBusy}"/>
+
+        <Label 
+            Text="{Binding ProgressTitle}" 
+            HorizontalOptions="Center" />
+
+        <ProgressBar 
+            x:Name="MyProgressBar"
+            Progress="{Binding CurrentProgress}"
+            ProgressColor="Blue"
+            HorizontalOptions="Fill"
+            IsVisible="{Binding IsBusy}"/>
+
+        <Button 
+            Text="Start initialisation" 
+            Command="{Binding RetrieveCommand}"
+            IsEnabled="{Binding IsNotBusy}"
+            IsVisible="{Binding IsInitialisation}"
+            HorizontalOptions="Center"
+            Margin="8"/>
+    </VerticalStackLayout>
+</ContentPage>

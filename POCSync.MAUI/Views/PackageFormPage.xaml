@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
+             x:DataType="viewmodel:PackageFormViewModel"
+             x:Class="POCSync.MAUI.Views.PackageFormPage"
+             Title="PackageFormPage">
+    
+    <VerticalStackLayout Spacing="25" Padding="30">
+        <Label Text="Create New Package" 
+                   FontSize="24" 
+                   HorizontalOptions="Center"/>
+        <Label Text="{Binding PackageId}" 
+                   FontSize="24" 
+                   HorizontalOptions="Center"/>
+
+        <VerticalStackLayout Spacing="5">
+            <Label Text="Reference" FontAttributes="Bold"/>
+            <Entry x:Name="ReferenceEntry" 
+                       Placeholder="Enter package reference"
+                       Text="{Binding Reference}"/>
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Spacing="5">
+            <Label Text="Weight (kg)" FontAttributes="Bold"/>
+            <Entry x:Name="WeightEntry" 
+                       Placeholder="Enter weight"
+                       Keyboard="Numeric"
+                       Text="{Binding Weight}"/>
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Spacing="5">
+            <Label Text="Volume (m³)" FontAttributes="Bold"/>
+            <Entry x:Name="VolumeEntry" 
+                       Placeholder="Enter volume"
+                       Keyboard="Numeric"
+                       Text="{Binding Volume}"/>
+        </VerticalStackLayout>
+
+        <VerticalStackLayout Spacing="5">
+            <Label Text="Tare Weight (kg)" FontAttributes="Bold"/>
+            <Entry x:Name="TareWeightEntry" 
+                       Placeholder="Enter tare weight"
+                       Keyboard="Numeric"
+                       Text="{Binding TareWeight}"/>
+        </VerticalStackLayout>
+
+        <HorizontalStackLayout HorizontalOptions="Center" Spacing="30">
+            <Button Text="Cancel" 
+                        WidthRequest="120"
+                        Command="{Binding CancelCommand}"/>
+
+            <Button Text="Create" 
+                        WidthRequest="120"
+                        BackgroundColor="{StaticResource Primary}"
+                        IsVisible="{Binding IsNotEditMode}"
+                        Command="{Binding CreatePackageCommand}"/>
+
+            <Button Text="Update" 
+                        WidthRequest="120"
+                        BackgroundColor="{StaticResource Primary}"
+                        IsVisible="{Binding IsEditMode}"
+                        Command="{Binding UpdatePackageCommand}"/>
+        </HorizontalStackLayout>
+        
+    </VerticalStackLayout>
+</ContentPage>

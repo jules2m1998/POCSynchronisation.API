@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Infrastructure.Dapper
-{
-    internal class Usings
-    {
-    }
-}
+﻿global using Infrastructure.Dapper.Abstractions;
+global using Infrastructure.Dapper.Persistence;
+global using Infrastructure.Dapper.Repository;
+global using Microsoft.Extensions.DependencyInjection;
+global using Poc.Synchronisation.Domain;
+global using Poc.Synchronisation.Domain.Abstractions;
+global using Poc.Synchronisation.Domain.Models;
+//global using Infrastructure.Dapper.Services.Generated;
+global using Refit;

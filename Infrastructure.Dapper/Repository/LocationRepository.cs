@@ -1,18 +1,10 @@
 ﻿using Dapper;
-using Infrastructure.Dapper.Abstractions;
-using Poc.Synchronisation.Domain.Abstractions;
-using Poc.Synchronisation.Domain.Models;
 
 namespace Infrastructure.Dapper.Repository;
 
-public class LocationRepository : IBaseRepository<Location, Guid>
+public class LocationRepository(IDbConnectionFactory dbConnectionFactory) : IBaseRepository<Location, Guid>
 {
-    private readonly IDbConnectionFactory _dbConnectionFactory;
-
-    public LocationRepository(IDbConnectionFactory dbConnectionFactory)
-    {
-        _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
-    }
+    private readonly IDbConnectionFactory _dbConnectionFactory = dbConnectionFactory ?? throw new ArgumentNullException(nameof(dbConnectionFactory));
 
     public async Task<bool> AddAsync(Location entity, CancellationToken cancellationToken = default)
     {
