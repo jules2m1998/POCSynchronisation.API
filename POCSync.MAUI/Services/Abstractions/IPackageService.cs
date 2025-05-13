@@ -1,5 +1,4 @@
 ﻿using Poc.Synchronisation.Application.Features.Packages.Commands.CreatePackage;
-using Poc.Synchronisation.Application.Features.Packages.Commands.DeletePackage;
 using Poc.Synchronisation.Application.Features.Packages.Commands.UpdatePackage;
 using Poc.Synchronisation.Domain.Models;
 

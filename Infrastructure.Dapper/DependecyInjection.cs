@@ -33,16 +33,6 @@ public static class DependecyInjection
                 ServerCertificateCustomValidationCallback =
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             });
-
-        // Build service provider
-        var serviceProvider = services.BuildServiceProvider();
-
-        // Initialize database
-        using (var scope = serviceProvider.CreateScope())
-        {
-            var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
-            await initializer.InitializeDatabaseAsync();
-        }
         return services;
     }
 }

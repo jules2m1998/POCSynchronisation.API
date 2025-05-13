@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace POCSync.MAUI.Helpers;
+﻿namespace POCSync.MAUI.Helpers;
 public class PermissionHelper
 {
     public static async Task<bool> CheckAndRequestStoragePermission()

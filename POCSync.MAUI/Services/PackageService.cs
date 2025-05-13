@@ -70,7 +70,7 @@ public class PackageService(ISender sender, IBaseRepository<StoredEvent, Guid> e
         {
             return false;
         }
-        var package = await sender.Send(new GetPackageByIdQuery(command.Id), cancellationToken); 
+        var package = await sender.Send(new GetPackageByIdQuery(command.Id), cancellationToken);
 
         if (package.Package is null)
         {

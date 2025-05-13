@@ -4,9 +4,9 @@ namespace POCSync.MAUI.Views;
 
 public partial class PackageFormPage : ContentPage
 {
-	public PackageFormPage(PackageFormViewModel vm)
-	{
-		InitializeComponent();
-		BindingContext = vm;
-	}
+    public PackageFormPage(PackageFormViewModel vm)
+    {
+        InitializeComponent();
+        BindingContext = vm;
+    }
 }

@@ -74,7 +74,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="Mediator" Version="1.0.15" />
+		<PackageReference Include="Mediator" Version="1.0.17" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
@@ -84,7 +84,7 @@
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.4" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0" />
-		<PackageReference Include="Poc.Synchronisation.Application" Version="1.0.15" />
+		<PackageReference Include="Poc.Synchronisation.Application" Version="1.0.17" />
 	</ItemGroup>
 
 	<ItemGroup>

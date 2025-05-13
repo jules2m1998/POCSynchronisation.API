@@ -1,11 +1,13 @@
 ﻿using Dapper;
 using Infrastructure.Dapper;
+using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.TypeHandlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Application;
 using POCSync.MAUI.Services;
 using POCSync.MAUI.Services.Abstractions;
+using POCSync.MAUI.Tools;
 using POCSync.MAUI.ViewModels;
 using POCSync.MAUI.Views;
 
@@ -25,7 +27,7 @@ namespace POCSync.MAUI
                 });
             builder.AddConfiguration();
 #if DEBUG
-    		builder.Logging.AddDebug();
+            builder.Logging.AddDebug();
 #endif
             SQLitePCL.Batteries_V2.Init();
 
@@ -47,8 +49,7 @@ namespace POCSync.MAUI
 #endif
 
 
-
-            var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
+            SqlMapper.AddTypeHandler(new SqliteGuidTypeHandler());
 
 
             builder.Services.AddTransient<PackageListViewModel>();
@@ -60,8 +61,9 @@ namespace POCSync.MAUI
             builder.Services.AddTransient<PackageFormPage>();
 
             builder.Services.AddScoped<IPackageService, PackageService>();
+            builder.Services.AddScoped<IPermissionManger, PermisionManager>();
 
-            SqlMapper.AddTypeHandler(new SqliteGuidTypeHandler());
+            var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
 
             return builder.Build();
         }

@@ -1,14 +1,28 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Infrastructure.Dapper.Repository;
 using Infrastructure.Dapper.Services.Generated;
 using Mapster;
+using Mediator.Abstractions;
 using Poc.Synchronisation.Application;
+using Poc.Synchronisation.Application.Features.Synchronisation.Commands.Synchronisation;
+using Poc.Synchronisation.Domain;
+using Poc.Synchronisation.Domain.Abstractions;
+using POCSync.MAUI.Extensions;
+using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
 
-public partial class SynchronisationViewModel(IApi api, IInitialiser initialiser) : BaseViewModel
+public partial class SynchronisationViewModel(
+        IApi api,
+        IInitialiser initialiser,
+        IBaseRepository<User, Guid> userRepo,
+        IBaseRepository<StoredEvent, Guid> storeEventRepo,
+        ISender sender
+    ) : BaseViewModel
 {
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotInitialisation))]
     bool isInitialisation = true;
 
     [ObservableProperty]
@@ -19,6 +33,29 @@ public partial class SynchronisationViewModel(IApi api, IInitialiser initialiser
 
     [ObservableProperty]
     double currentProgress;
+
+
+    public bool IsNotInitialisation => !IsInitialisation;
+
+    private User? user { get; set; }
+
+    [RelayCommand]
+    async Task Initialisation()
+    {
+        var users = await userRepo.GetAllAsync();
+        user = users.First();
+        if (user is null)
+        {
+            IsInitialisation = true;
+            return;
+        }
+        if (user.LastEventSynced != Guid.Empty && user.IsInitialised)
+        {
+            IsInitialisation = false;
+            return;
+        }
+        IsInitialisation = true;
+    }
 
 
     [RelayCommand]
@@ -37,6 +74,17 @@ public partial class SynchronisationViewModel(IApi api, IInitialiser initialiser
             var result = await initialiser.Initialise(storedData);
             CurrentProgress = 1;
             ProgressTitle = "Saving ended";
+            if (user is not null)
+            {
+                var response = await api.LastSavedEventId(user.Id);
+                if (response is not null)
+                {
+                    user.LastEventSynced = response.Id ?? Guid.Empty;
+                    user.IsInitialised = true;
+                    await userRepo.UpdateAsync(user);
+                    await Initialisation();
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -45,6 +93,69 @@ public partial class SynchronisationViewModel(IApi api, IInitialiser initialiser
         finally
         {
             IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    async Task Synchronise()
+    {
+        IsBusy = true;
+        try
+        {
+            await SendEventsAsync();
+
+            ProgressTitle = "Fetching events";
+            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty);
+            var eventsToSync = result.Adapt<ICollection<StoredEvent>>();
+            await ApplyEventAsync(eventsToSync);
+        }
+        catch (Exception ex)
+        {
+            // Handle exceptions
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
+    {
+        var total = eventsToSync.Count;
+        var iteration = 0;
+        foreach (var item in eventsToSync.Batch(10))
+        {
+            var command = new SynchronisationCommand(item);
+            var data = await sender.Send(command);
+            var progress = (double)iteration / total;
+            CurrentProgress = progress * 0.6 + 0.4;
+        }
+        ProgressTitle = "Saving ended";
+    }
+
+    private async Task SendEventsAsync()
+    {
+        // Call the API to synchronise data
+        CurrentProgress = 0.0;
+        ProgressTitle = "Synchronising data.";
+        var @events = await storeEventRepo.GetAllAsync();
+        var total = @events.Count();
+        var iteration = 0;
+
+        foreach (var item in @events.Batch(10))
+        {
+            var dto = item.Adapt<List<SynchronisedStoredEventDto>>();
+            var request = new SynchronisationRequest
+            {
+                Events = dto
+            };
+
+            var jsonData = JsonSerializer.Serialize(request);
+
+            var data = await api.Synchronisation(request); // here
+            iteration++;
+            var progress = (double)iteration / total;
+            CurrentProgress = progress * 0.6;
         }
     }
 }

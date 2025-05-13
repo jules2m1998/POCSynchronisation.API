@@ -1,6 +1,4 @@
-﻿using Infrastructure.Dapper.Abstractions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 
 namespace Infrastructure.Dapper;
 
@@ -9,6 +7,7 @@ namespace Infrastructure.Dapper;
 /// </summary>
 public class DatabaseInitializer(
     ILogger<DatabaseInitializer> logger,
+    IPermissionManger permissionManger,
     IServiceProvider serviceProvider)
 {
     private readonly ILogger<DatabaseInitializer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -21,6 +20,8 @@ public class DatabaseInitializer(
     public async Task InitializeDatabaseAsync()
     {
         _logger.LogInformation("Starting database initialization");
+        var permissionGranted = await permissionManger.CheckAndRequestStoragePermission();
+        if (!permissionGranted) return;
 
         try
         {

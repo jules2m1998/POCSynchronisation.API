@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using Infrastructure.Dapper.Abstractions;
 using Microsoft.Data.Sqlite;
 using System.Data;
 
@@ -11,7 +10,7 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
     private IDbConnection? _connection;
     private readonly string pass = string.Empty;
     private bool _initialized = false;
-    private readonly object _lock = new object();
+    private readonly object _lock = new();
 
     public SqliteConnectionFactory(string dbPath, string password)
     {
@@ -58,8 +57,8 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
                 try
                 {
                     _connection = new SqliteConnection(_connectionString);
-                    var result = _connection.Execute($"PRAGMA key = '{pass}';");
                     _connection.Open();
+                    var result = _connection.Execute($"PRAGMA key = '{pass}';");
                     _initialized = true;
                 }
                 catch (Exception ex)

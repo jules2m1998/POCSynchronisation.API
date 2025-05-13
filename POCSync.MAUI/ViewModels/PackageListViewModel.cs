@@ -5,7 +5,6 @@ using POCSync.MAUI.Services.Abstractions;
 using POCSync.MAUI.Views;
 using System.Collections.ObjectModel;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace POCSync.MAUI.ViewModels;
 
@@ -84,7 +83,7 @@ public partial class PackageListViewModel(IPackageService service, IApi api) : B
                 await Shell.Current.DisplayAlert("Error", "Failed to delete package", "OK");
             }
         }
-        catch(Exception ex)
+        catch (Exception ex)
         {
             await Shell.Current.DisplayAlert("Error", $"Error deleting package: {ex.Message}", "OK");
         }

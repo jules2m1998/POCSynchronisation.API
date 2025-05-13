@@ -54,29 +54,6 @@
             "description": "Internal Server Error"
           }
         }
-      },
-      "get": {
-        "tags": [
-          "Synchronisation"
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SynchronisedStoredEventDto"
-                  }
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error"
-          }
-        }
       }
     },
     "/api/Synchronisation/retrieve": {
@@ -100,6 +77,69 @@
           }
         }
       }
+    },
+    "/api/Synchronisation/NonSyncedEvents/{lastSyncedId}": {
+      "get": {
+        "tags": [
+          "Synchronisation"
+        ],
+        "parameters": [
+          {
+            "name": "lastSyncedId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NonSyncEventsDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Synchronisation/LastSavedEventId/{userId}": {
+      "get": {
+        "tags": [
+          "Synchronisation"
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LastSavedEventIdDto"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -113,6 +153,66 @@
         ],
         "type": "integer",
         "format": "int32"
+      },
+      "LastSavedEventIdDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "NonSyncEventsDto": {
+        "type": "object",
+        "properties": {
+          "eventType": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataType": {
+            "type": "string",
+            "nullable": true
+          },
+          "dataJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "conflictWithJson": {
+            "type": "string",
+            "nullable": true
+          },
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "mobileEventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "elementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "eventStatus": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "emitedOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "savedOn": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lastSyncEvent": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "additionalProperties": false
       },
       "ProblemDetails": {
         "type": "object",
