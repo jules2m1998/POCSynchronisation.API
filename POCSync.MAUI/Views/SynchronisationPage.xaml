@@ -39,5 +39,9 @@
             IsVisible="{Binding IsNotInitialisation}"
             HorizontalOptions="Center"
             Margin="8"/>
+
+        <Label 
+            Text="{Binding StoredEventJson}" 
+            HorizontalOptions="Center" />
     </VerticalStackLayout>
 </ContentPage>

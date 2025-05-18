@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
 
-public partial class PackageListViewModel(IPackageService service, IApi api) : BaseViewModel
+public partial class PackageListViewModel(IPackageService service) : BaseViewModel
 {
     public ObservableCollection<Package> Packages { get; set; } = [];
 

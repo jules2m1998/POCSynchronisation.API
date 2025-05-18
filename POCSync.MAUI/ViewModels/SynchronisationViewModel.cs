@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.Repository;
 using Infrastructure.Dapper.Services.Generated;
 using Mapster;
@@ -9,6 +10,7 @@ using Poc.Synchronisation.Application.Features.Synchronisation.Commands.Synchron
 using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
 using POCSync.MAUI.Extensions;
+using System.Text;
 using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
@@ -18,6 +20,7 @@ public partial class SynchronisationViewModel(
         IInitialiser initialiser,
         IBaseRepository<User, Guid> userRepo,
         IBaseRepository<StoredEvent, Guid> storeEventRepo,
+        IServiceProvider serviceProvider,
         ISender sender
     ) : BaseViewModel
 {
@@ -33,6 +36,9 @@ public partial class SynchronisationViewModel(
 
     [ObservableProperty]
     double currentProgress;
+
+    [ObservableProperty]
+    string storedEventJson = "";
 
 
     public bool IsNotInitialisation => !IsInitialisation;
@@ -55,6 +61,7 @@ public partial class SynchronisationViewModel(
             return;
         }
         IsInitialisation = true;
+        StoredEventJson = JsonSerializer.Serialize(await storeEventRepo.GetAllAsync());
     }
 
 
@@ -105,7 +112,7 @@ public partial class SynchronisationViewModel(
             await SendEventsAsync();
 
             ProgressTitle = "Fetching events";
-            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty);
+            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty, user.Id);
             var eventsToSync = result.Adapt<ICollection<StoredEvent>>();
             await ApplyEventAsync(eventsToSync);
         }
@@ -116,6 +123,7 @@ public partial class SynchronisationViewModel(
         finally
         {
             IsBusy = false;
+            StoredEventJson = JsonSerializer.Serialize(await storeEventRepo.GetAllAsync());
         }
     }
 
@@ -129,33 +137,130 @@ public partial class SynchronisationViewModel(
             var data = await sender.Send(command);
             var progress = (double)iteration / total;
             CurrentProgress = progress * 0.6 + 0.4;
+            var last = data.Events.LastOrDefault();
+            if (last is not null && user is not null)
+            {
+                user.LastEventSynced = last.MobileEventId;
+                user.IsInitialised = true;
+                await userRepo.UpdateAsync(user);
+            }
         }
         ProgressTitle = "Saving ended";
+
     }
 
     private async Task SendEventsAsync()
     {
-        // Call the API to synchronise data
-        CurrentProgress = 0.0;
-        ProgressTitle = "Synchronising data.";
-        var @events = await storeEventRepo.GetAllAsync();
-        var total = @events.Count();
-        var iteration = 0;
-
-        foreach (var item in @events.Batch(10))
+        try
         {
-            var dto = item.Adapt<List<SynchronisedStoredEventDto>>();
-            var request = new SynchronisationRequest
+            // Call the API to synchronise data
+            CurrentProgress = 0.0;
+            ProgressTitle = "Synchronising data.";
+            var @events = await storeEventRepo.GetAllAsync();
+            var total = @events.Count();
+            var iteration = 0;
+            var resultEventa = new List<StoredEvent>();
+
+            foreach (var item in @events.Batch(10))
             {
-                Events = dto
+                var dto = item.Adapt<List<SynchronisedStoredEventDto>>();
+                var request = new SynchronisationRequest
+                {
+                    Events = dto
+                };
+
+                var data = await SynchronizeWithServerAsync(request);
+                var jsonData = JsonSerializer.Serialize(data);
+                var createEvents = data
+                    .Results
+                    .Where(x => x.EventType.StartsWith("create", StringComparison.CurrentCultureIgnoreCase))
+                    .ToList();
+
+                resultEventa.AddRange(createEvents.Adapt<List<StoredEvent>>());
+                iteration++;
+                var progress = (double)iteration / total;
+
+                foreach (var result in data.Results)
+                {
+                    if (result.EventStatus == EventType.Success)
+                    {
+                        var id = result.EventId;
+                        var r = await storeEventRepo.DeleteByIdAsync(id);
+                    }
+                }
+
+                CurrentProgress = progress * 0.6;
+
+            }
+
+            var idUpdater = serviceProvider.GetServices<IEventIdUpdater>();
+            foreach (var service in idUpdater)
+            {
+                var result = await service.UpdateEventId(resultEventa);
+            }
+        }catch(Exception ex)
+        {
+
+        }
+    }
+
+    private async Task<SynchronisationResponse> SynchronizeWithServerAsync(SynchronisationRequest request)
+    {
+        // Create a handler that accepts all certificates (WARNING: ONLY FOR DEVELOPMENT)
+        var handler = new HttpClientHandler
+        {
+            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+        };
+
+        // For Android specifically, use AndroidMessageHandler
+        if (DeviceInfo.Platform == DevicePlatform.Android)
+        {
+            handler = new()
+            {
+                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
             };
+        }
 
-            var jsonData = JsonSerializer.Serialize(request);
+        using var httpClient = new HttpClient(handler);
+        httpClient.BaseAddress = new Uri("https://10.0.2.2:7199/");
 
-            var data = await api.Synchronisation(request); // here
-            iteration++;
-            var progress = (double)iteration / total;
-            CurrentProgress = progress * 0.6;
+        // Configure headers
+        httpClient.DefaultRequestHeaders.Accept.Add(
+            new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+        // Serialize the request
+        var jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
+        };
+
+        var jsonContent = JsonSerializer.Serialize(request, jsonOptions);
+        var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+        try
+        {
+            var response = await httpClient.PostAsync("api/Synchronisation", content);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var result = JsonSerializer.Deserialize<SynchronisationResponse>(responseContent, jsonOptions);
+                return result;
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                throw new HttpRequestException(
+                    $"Synchronization failed with status code {response.StatusCode}: {errorContent}",
+                    null,
+                    response.StatusCode);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Exception: {ex.Message}");
+            throw;
         }
     }
 }

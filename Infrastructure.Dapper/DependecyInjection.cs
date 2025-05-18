@@ -1,4 +1,5 @@
-﻿using Infrastructure.Dapper.Services.Generated;
+﻿using Infrastructure.Dapper.Services.EventIdUpdaters;
+using Infrastructure.Dapper.Services.Generated;
 
 namespace Infrastructure.Dapper;
 
@@ -20,6 +21,9 @@ public static class DependecyInjection
         services.AddScoped<IModelInitialiser, PackageRepository>();
         services.AddScoped<IModelInitialiser, StoredEventRepository>();
         services.AddScoped<IModelInitialiser, UserRepository>();
+
+
+        services.AddScoped<IEventIdUpdater, CreatePackageIdUpdater>();
 
         services.AddScoped<DatabaseInitializer>();
 

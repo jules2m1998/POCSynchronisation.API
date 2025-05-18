@@ -1,5 +1,6 @@
 ﻿using Dapper;
 using Poc.Synchronisation.Domain.Events.Packages;
+using System.Text.Json;
 
 namespace Infrastructure.Dapper.Repository;
 
@@ -41,7 +42,6 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
         {
             entity.EventId = Guid.NewGuid();
         }
-        entity.MobileEventId = Guid.NewGuid();
         entity.EventStatus = EventType.Idle;
         entity.EmitedOn = DateTime.UtcNow;
 
@@ -65,8 +65,8 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
             entity.MobileEventId,
             entity.ElementId,
             EventStatus = (int)entity.EventStatus,
-            EmitedOn = entity.EmitedOn.ToString("o"), // ISO 8601 format for SQLite
-            SavedOn = entity.SavedOn.ToString("o"),   // ISO 8601 format for SQLite
+            entity.EmitedOn, // ISO 8601 format for SQLite
+            entity.SavedOn,   // ISO 8601 format for SQLite
             entity.LastSyncEvent,
             entity.EventType,
             entity.DataType,
@@ -75,5 +75,23 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
         });
 
         return affected > 0;
+    }
+
+    /// <summary>
+    /// Deletes all stored events with the specified MobileEventId
+    /// </summary>
+    /// <param name="mobileEventId">The mobile event ID to delete</param>
+    /// <param name="cancellationToken">Optional cancellation token</param>
+    /// <returns>The number of records deleted</returns>
+    public override async Task<bool> DeleteByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        const string sql = @"
+        DELETE FROM StoredEvents 
+        WHERE EventId = @EventId;";
+
+        using var connection = _dbConnectionFactory.CreateConnection();
+        var affected = await connection.ExecuteAsync(sql, new { EventId = id });
+
+        return  affected > 1;
     }
 }

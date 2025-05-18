@@ -21,7 +21,7 @@ public class BaserRepository<TEntity, TId>(IDbConnectionFactory dbConnectionFact
         return result;
     }
 
-    public async Task<bool> DeleteByIdAsync(TId id, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> DeleteByIdAsync(TId id, CancellationToken cancellationToken = default)
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         var element = await connection.GetAsync<TEntity>(id, cancellationToken: cancellationToken);

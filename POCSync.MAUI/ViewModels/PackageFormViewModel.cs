@@ -2,13 +2,16 @@
 using CommunityToolkit.Mvvm.Input;
 using Poc.Synchronisation.Application.Features.Packages.Commands.CreatePackage;
 using Poc.Synchronisation.Application.Features.Packages.Commands.UpdatePackage;
+using Poc.Synchronisation.Domain;
+using Poc.Synchronisation.Domain.Abstractions;
 using Poc.Synchronisation.Domain.Models;
 using POCSync.MAUI.Services.Abstractions;
+using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
 
 [QueryProperty(nameof(PackageJson), "PackageJson")]
-public partial class PackageFormViewModel(IPackageService service) : BaseViewModel
+public partial class PackageFormViewModel(IPackageService service, IBaseRepository<StoredEvent, Guid> storeEvent) : BaseViewModel
 {
     [ObservableProperty]
     private string reference;
@@ -34,6 +37,9 @@ public partial class PackageFormViewModel(IPackageService service) : BaseViewMod
 
     public bool IsNotEditMode => !IsEditMode;
 
+    [ObservableProperty]
+    private string eventJson = string.Empty;
+
     // Handle the deserialization when packageJson is set
     partial void OnPackageJsonChanged(string value)
     {
@@ -41,7 +47,7 @@ public partial class PackageFormViewModel(IPackageService service) : BaseViewMod
         {
             try
             {
-                var package = System.Text.Json.JsonSerializer.Deserialize<Package>(value);
+                var package = JsonSerializer.Deserialize<Package>(value);
                 if (package != null)
                 {
                     // Populate the form fields
@@ -51,6 +57,7 @@ public partial class PackageFormViewModel(IPackageService service) : BaseViewMod
                     Volume = package.Volume;
                     TareWeight = package.TareWeight;
                     IsEditMode = true;
+                    FillEvents(package);
                 }
             }
             catch (Exception ex)
@@ -140,5 +147,12 @@ public partial class PackageFormViewModel(IPackageService service) : BaseViewMod
         {
             IsBusy = false;
         }
+    }
+
+    void FillEvents(Package package)
+    {
+        var events = storeEvent.GetAllAsync().Result.Where((x => x.MobileEventId == package.Id));
+        var debug = JsonSerializer.Serialize(events);
+        EventJson = JsonSerializer.Serialize(events.FirstOrDefault(x => x.MobileEventId == package.Id));
     }
 }

@@ -28,7 +28,7 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
             entity.Weight,
             entity.Volume,
             entity.TareWeight,
-            CreatedAt = entity.CreatedAt.ToString("o"),
+            entity.CreatedAt,
             LocationId = entity.Location?.Id
         });
 
