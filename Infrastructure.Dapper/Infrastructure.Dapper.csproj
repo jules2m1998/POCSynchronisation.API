@@ -25,7 +25,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\..\POCSync\src\Domain\Domain.csproj" />
+	  <ProjectReference Include="..\..\..\..\..\source\repos\POCSynchronisation\src\Domain\Domain.csproj" />
 	</ItemGroup>
 
 </Project>

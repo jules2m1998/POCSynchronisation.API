@@ -7,9 +7,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "POCSync.MAUI", "POCSync.MAU
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Dapper", "Infrastructure.Dapper\Infrastructure.Dapper.csproj", "{09D82855-E6EA-4DF7-8928-D95E08788CF4}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "..\..\POCSync\src\Application\Application.csproj", "{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "..\..\..\..\source\repos\POCSynchronisation\src\Domain\Domain.csproj", "{16FBE7EF-4B0D-8C22-A77D-7503B6742E63}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "..\..\POCSync\src\Domain\Domain.csproj", "{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "..\..\..\..\source\repos\POCSynchronisation\src\Application\Application.csproj", "{50C87965-0CB5-2D12-A25D-2A9266633C4D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "libs", "libs", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EventMediator", "..\..\..\..\source\repos\POCSynchronisation\libs\EventMediator\EventMediator.csproj", "{442DED66-89DB-B582-EF74-C0977A6FD3EC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -26,17 +30,24 @@ Global
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Release|Any CPU.Build.0 = Release|Any CPU
-		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{16FBE7EF-4B0D-8C22-A77D-7503B6742E63}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{16FBE7EF-4B0D-8C22-A77D-7503B6742E63}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{16FBE7EF-4B0D-8C22-A77D-7503B6742E63}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{16FBE7EF-4B0D-8C22-A77D-7503B6742E63}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50C87965-0CB5-2D12-A25D-2A9266633C4D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50C87965-0CB5-2D12-A25D-2A9266633C4D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50C87965-0CB5-2D12-A25D-2A9266633C4D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50C87965-0CB5-2D12-A25D-2A9266633C4D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{442DED66-89DB-B582-EF74-C0977A6FD3EC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{442DED66-89DB-B582-EF74-C0977A6FD3EC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{442DED66-89DB-B582-EF74-C0977A6FD3EC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{442DED66-89DB-B582-EF74-C0977A6FD3EC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{442DED66-89DB-B582-EF74-C0977A6FD3EC} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {8C008897-7916-4900-846A-0FE3EB8EE32A}
