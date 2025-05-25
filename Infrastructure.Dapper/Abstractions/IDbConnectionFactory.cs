@@ -5,4 +5,5 @@ namespace Infrastructure.Dapper.Abstractions;
 public interface IDbConnectionFactory
 {
     IDbConnection CreateConnection();
+    void CleanDb();
 }

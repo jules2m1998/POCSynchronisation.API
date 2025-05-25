@@ -19,7 +19,6 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
                 EventStatus INTEGER NOT NULL,
                 EmitedOn TEXT NOT NULL,
                 SavedOn TEXT NOT NULL,
-                LastSyncEvent TEXT NOT NULL,
                 EventType TEXT NOT NULL,
                 DataType TEXT,
                 DataJson TEXT NOT NULL,
@@ -51,11 +50,11 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
         const string sql = @"
             INSERT INTO StoredEvents (
                 EventId, MobileEventId, ElementId, EventStatus, EmitedOn, SavedOn, 
-                LastSyncEvent, EventType, DataType, DataJson, ConflictWithJson
+                EventType, DataType, DataJson, ConflictWithJson
             )
             VALUES (
-                @EventId, @MobileEventId, @ElementId, @EventStatus, @EmitedOn, @SavedOn, 
-                @LastSyncEvent, @EventType, @DataType, @DataJson, @ConflictWithJson
+                @EventId, @MobileEventId, @ElementId, @EventStatus, @EmitedOn, @SavedOn,
+                @EventType, @DataType, @DataJson, @ConflictWithJson
             );";
 
         using var connection = _dbConnectionFactory.CreateConnection();
@@ -67,7 +66,6 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
             EventStatus = (int)entity.EventStatus,
             entity.EmitedOn, // ISO 8601 format for SQLite
             entity.SavedOn,   // ISO 8601 format for SQLite
-            entity.LastSyncEvent,
             entity.EventType,
             entity.DataType,
             entity.DataJson,

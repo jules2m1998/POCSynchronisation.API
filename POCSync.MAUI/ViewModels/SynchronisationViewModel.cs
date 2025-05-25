@@ -12,6 +12,7 @@ using Poc.Synchronisation.Domain.Abstractions;
 using POCSync.MAUI.Extensions;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace POCSync.MAUI.ViewModels;
 
@@ -21,7 +22,8 @@ public partial class SynchronisationViewModel(
         IBaseRepository<User, Guid> userRepo,
         IBaseRepository<StoredEvent, Guid> storeEventRepo,
         IServiceProvider serviceProvider,
-        ISender sender
+        ISender sender,
+        IDbConnectionFactory db
     ) : BaseViewModel
 {
     [ObservableProperty]
@@ -127,6 +129,15 @@ public partial class SynchronisationViewModel(
         }
     }
 
+    [RelayCommand]
+    async Task ResetTables()
+    {
+        db.CleanDb();
+        IsInitialisation = true;
+        ProgressTitle = "Resetting tables";
+        ProgressMessage = "Tables reset successfully.";
+    }
+
     private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
     {
         var total = eventsToSync.Count;
@@ -222,7 +233,8 @@ public partial class SynchronisationViewModel(
         }
 
         using var httpClient = new HttpClient(handler);
-        httpClient.BaseAddress = new Uri("https://10.0.2.2:7199/");
+        //httpClient.BaseAddress = new Uri("https://10.0.2.2:7199/");
+        httpClient.BaseAddress = new Uri("https://a32c-102-115-49-59.ngrok-free.app/");
 
         // Configure headers
         httpClient.DefaultRequestHeaders.Accept.Add(

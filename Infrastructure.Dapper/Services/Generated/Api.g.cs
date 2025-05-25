@@ -87,10 +87,15 @@ namespace Infrastructure.Dapper.Services.Generated
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public enum EventType
     {
-        Idle = 0,
-        Success = 1,
-        Error = 2,
-        Conflict = 3
+
+        _0 = 0,
+
+        _1 = 1,
+
+        _2 = 2,
+
+        _3 = 3,
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -131,10 +136,10 @@ namespace Infrastructure.Dapper.Services.Generated
         public EventType EventStatus { get; set; }
 
         [JsonPropertyName("emitedOn")]
-        public System.DateTime EmitedOn { get; set; }
+        public System.DateTimeOffset EmitedOn { get; set; }
 
         [JsonPropertyName("savedOn")]
-        public System.DateTime SavedOn { get; set; }
+        public System.DateTimeOffset SavedOn { get; set; }
 
         [JsonPropertyName("lastSyncEvent")]
         public System.Guid LastSyncEvent { get; set; }
@@ -230,10 +235,10 @@ namespace Infrastructure.Dapper.Services.Generated
         public EventType EventStatus { get; set; }
 
         [JsonPropertyName("emitedOn")]
-        public System.DateTime EmitedOn { get; set; }
+        public System.DateTimeOffset EmitedOn { get; set; }
 
         [JsonPropertyName("savedOn")]
-        public System.DateTime SavedOn { get; set; }
+        public System.DateTimeOffset SavedOn { get; set; }
 
         [JsonPropertyName("lastSyncEvent")]
         public System.Guid LastSyncEvent { get; set; }

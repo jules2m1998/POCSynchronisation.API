@@ -1,4 +1,5 @@
 ﻿using Dapper;
+using Infrastructure.Dapper.Abstractions;
 using Microsoft.Data.Sqlite;
 using System.Data;
 
@@ -86,5 +87,24 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
             }
         }
         GC.SuppressFinalize(this);
+    }
+
+    public void CleanDb()
+    {
+        using var connection = CreateConnection();
+        connection.Open();
+        const string sql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
+
+        // For SQLite
+        var tables = connection.Query<string>(sql);
+
+        connection.Execute("PRAGMA foreign_keys = OFF");
+
+        foreach (var table in tables)
+        {
+            connection.Execute($"DROP TABLE IF EXISTS [{table}]");
+        }
+
+        connection.Execute("PRAGMA foreign_keys = ON");
     }
 }

@@ -7,6 +7,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "POCSync.MAUI", "POCSync.MAU
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Dapper", "Infrastructure.Dapper\Infrastructure.Dapper.csproj", "{09D82855-E6EA-4DF7-8928-D95E08788CF4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application", "..\..\POCSync\src\Application\Application.csproj", "{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain", "..\..\POCSync\src\Domain\Domain.csproj", "{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -22,6 +26,14 @@ Global
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{09D82855-E6EA-4DF7-8928-D95E08788CF4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0673A8C7-1D5F-30AA-ADE6-BC0660B074FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FFB801DF-0991-D2DC-FEB4-3612FB866BF8}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

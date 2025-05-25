@@ -40,6 +40,12 @@
             HorizontalOptions="Center"
             Margin="8"/>
 
+        <Button 
+            Text="Reset" 
+            Command="{Binding ResetTablesCommand}"
+            HorizontalOptions="Center"
+            Margin="8"/>
+
         <Label 
             Text="{Binding StoredEventJson}" 
             HorizontalOptions="Center" />
