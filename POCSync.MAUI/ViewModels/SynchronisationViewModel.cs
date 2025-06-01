@@ -12,7 +12,6 @@ using Poc.Synchronisation.Domain.Abstractions;
 using POCSync.MAUI.Extensions;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace POCSync.MAUI.ViewModels;
 
@@ -120,7 +119,7 @@ public partial class SynchronisationViewModel(
         }
         catch (Exception ex)
         {
-            // Handle exceptions
+            await Shell.Current.DisplayAlert("Error", $"An error occurred while synchronizing the package: {ex.Message}", "OK");
         }
         finally
         {
@@ -140,28 +139,45 @@ public partial class SynchronisationViewModel(
 
     private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
     {
-        var total = eventsToSync.Count;
-        var iteration = 0;
-        foreach (var item in eventsToSync.Batch(10))
+        var lastEventId = user?.LastEventSynced;
+        try
         {
-            var command = new SynchronisationCommand(item);
-            var data = await sender.Send(command);
-            var progress = (double)iteration / total;
-            CurrentProgress = progress * 0.6 + 0.4;
-            var last = data.Events.LastOrDefault();
-            if (last is not null && user is not null)
+            var total = eventsToSync.Count;
+            var iteration = 0;
+            foreach (var item in eventsToSync.Batch(10))
             {
-                user.LastEventSynced = last.MobileEventId;
+                var command = new SynchronisationCommand(item, Guid.Empty);
+                var data = await sender.Send(command);
+                var progress = (double)iteration / total;
+                CurrentProgress = progress * 0.6 + 0.4;
+                var last = data.Events.LastOrDefault();
+                if (last is not null)
+                {
+                    lastEventId = last.EventId;
+                }
+            }
+            ProgressTitle = "Saving ended";
+
+        }
+        catch
+        {
+
+        }
+        finally
+        {
+            if (user is not null && lastEventId is not null)
+            {
+                user.LastEventSynced = lastEventId ?? Guid.Empty;
                 user.IsInitialised = true;
                 await userRepo.UpdateAsync(user);
             }
         }
-        ProgressTitle = "Saving ended";
 
     }
 
     private async Task SendEventsAsync()
     {
+        var resultEventa = new List<StoredEvent>();
         try
         {
             // Call the API to synchronise data
@@ -170,18 +186,20 @@ public partial class SynchronisationViewModel(
             var @events = await storeEventRepo.GetAllAsync();
             var total = @events.Count();
             var iteration = 0;
-            var resultEventa = new List<StoredEvent>();
 
             foreach (var item in @events.Batch(10))
             {
                 var dto = item.Adapt<List<SynchronisedStoredEventDto>>();
                 var request = new SynchronisationRequest
                 {
-                    Events = dto
+                    Events = [.. dto.Select(x =>
+                    {
+                        x.LastSyncEvent = user?.LastEventSynced ?? Guid.Empty;
+                        return x;
+                    })]
                 };
 
                 var data = await SynchronizeWithServerAsync(request);
-                var jsonData = JsonSerializer.Serialize(data);
                 var createEvents = data
                     .Results
                     .Where(x => x.EventType.StartsWith("create", StringComparison.CurrentCultureIgnoreCase))
@@ -195,7 +213,7 @@ public partial class SynchronisationViewModel(
                 {
                     if (result.EventStatus == EventType.Success)
                     {
-                        var id = result.EventId;
+                        var id = result.MobileEventId;
                         var r = await storeEventRepo.DeleteByIdAsync(id);
                     }
                 }
@@ -203,15 +221,19 @@ public partial class SynchronisationViewModel(
                 CurrentProgress = progress * 0.6;
 
             }
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlert("Error", $"An error occurred while Sending Events the package: {ex.Message}", "OK");
+        }
+        finally
+        {
 
             var idUpdater = serviceProvider.GetServices<IEventIdUpdater>();
             foreach (var service in idUpdater)
             {
                 var result = await service.UpdateEventId(resultEventa);
             }
-        }catch(Exception ex)
-        {
-
         }
     }
 
@@ -234,7 +256,7 @@ public partial class SynchronisationViewModel(
 
         using var httpClient = new HttpClient(handler);
         //httpClient.BaseAddress = new Uri("https://10.0.2.2:7199/");
-        httpClient.BaseAddress = new Uri("https://a32c-102-115-49-59.ngrok-free.app/");
+        httpClient.BaseAddress = new Uri("https://localhost:7199/");
 
         // Configure headers
         httpClient.DefaultRequestHeaders.Accept.Add(
@@ -271,7 +293,7 @@ public partial class SynchronisationViewModel(
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Exception: {ex.Message}");
+            await Shell.Current.DisplayAlert("Error", $"An error occurred while synchronize with serverAsync the package: {ex.Message}", "OK");
             throw;
         }
     }

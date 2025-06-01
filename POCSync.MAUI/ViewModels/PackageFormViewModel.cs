@@ -80,7 +80,7 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
         {
             IsBusy = true;
 
-            var command = new CreatePackageCommand(Reference, Weight ?? 0, Volume ?? 0, TareWeight ?? 0);
+            var command = new CreatePackageCommand(Guid.Empty, Reference, Weight ?? 0, Volume ?? 0, TareWeight ?? 0);
             var result = await service.AddPackageAsync(command);
 
             if (result)

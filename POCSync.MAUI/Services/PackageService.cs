@@ -1,5 +1,4 @@
-﻿using Mediator.Abstractions;
-using Poc.Synchronisation.Application.Features.Packages.Commands.CreatePackage;
+﻿using Poc.Synchronisation.Application.Features.Packages.Commands.CreatePackage;
 using Poc.Synchronisation.Application.Features.Packages.Commands.UpdatePackage;
 using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
@@ -7,7 +6,6 @@ using Poc.Synchronisation.Domain.Events.Packages;
 using Poc.Synchronisation.Domain.Models;
 using POCSync.MAUI.Services.Abstractions;
 using System.Text.Json;
-using System.Threading.Tasks;
 
 namespace POCSync.MAUI.Services;
 
@@ -130,7 +128,8 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
         var @createEvent = new UpdatePackageEvent
         {
             Data = newPackage,
-            MobileEventId = package.Id
+            MobileEventId = package.Id,
+            ElementId = package.Id
         };
         var storedEvent = @createEvent.ToEventStore();
         storedEvent.EventId = Guid.CreateVersion7();
@@ -140,8 +139,8 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
         var similars = eventStore
             .Queryable()
             .Where(
-                x => x.MobileEventId == storedEvent.MobileEventId 
-                    && x.EventType == nameof(UpdatePackageEvent) 
+                x => x.MobileEventId == storedEvent.MobileEventId
+                    && x.EventType == nameof(UpdatePackageEvent)
                     && x.EventId != storedEvent.EventId
                 )
             .ToList();

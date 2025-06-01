@@ -1,6 +1,6 @@
 ﻿using Dapper;
+using Dommel;
 using Poc.Synchronisation.Domain.Events.Packages;
-using System.Text.Json;
 
 namespace Infrastructure.Dapper.Repository;
 
@@ -15,6 +15,7 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
             CREATE TABLE IF NOT EXISTS StoredEvents (
                 EventId TEXT NOT NULL PRIMARY KEY,
                 MobileEventId TEXT NOT NULL,
+                UserId TEXT NOT NULL,
                 ElementId TEXT NOT NULL,
                 EventStatus INTEGER NOT NULL,
                 EmitedOn TEXT NOT NULL,
@@ -36,43 +37,55 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
 
     public override async Task<bool> AddAsync(StoredEvent entity, CancellationToken cancellationToken = default)
     {
-        // Ensure we have a valid ID
-        if (entity.EventId == Guid.Empty)
+        try
         {
-            entity.EventId = Guid.NewGuid();
-        }
-        entity.EventStatus = EventType.Idle;
-        entity.EmitedOn = DateTime.UtcNow;
+            // Ensure we have a valid ID
+            if (entity.EventId == Guid.Empty)
+            {
+                entity.EventId = Guid.NewGuid();
+            }
+            entity.EventStatus = EventType.Idle;
+            entity.EmitedOn = DateTime.UtcNow;
 
-        // Set SavedOn to current UTC time
-        entity.SavedOn = DateTime.UtcNow;
+            // Set SavedOn to current UTC time
+            entity.SavedOn = DateTime.UtcNow;
 
-        const string sql = @"
+            const string sql = @"
             INSERT INTO StoredEvents (
-                EventId, MobileEventId, ElementId, EventStatus, EmitedOn, SavedOn, 
+                EventId, MobileEventId, ElementId, EventStatus, EmitedOn, SavedOn, UserId,
                 EventType, DataType, DataJson, ConflictWithJson
             )
             VALUES (
-                @EventId, @MobileEventId, @ElementId, @EventStatus, @EmitedOn, @SavedOn,
+                @EventId, @MobileEventId, @ElementId, @EventStatus, @EmitedOn, @SavedOn, @UserId,
                 @EventType, @DataType, @DataJson, @ConflictWithJson
             );";
 
-        using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new
-        {
-            entity.EventId,
-            entity.MobileEventId,
-            entity.ElementId,
-            EventStatus = (int)entity.EventStatus,
-            entity.EmitedOn, // ISO 8601 format for SQLite
-            entity.SavedOn,   // ISO 8601 format for SQLite
-            entity.EventType,
-            entity.DataType,
-            entity.DataJson,
-            entity.ConflictWithJson
-        });
+            using var connection = _dbConnectionFactory.CreateConnection();
 
-        return affected > 0;
+            var users = await connection.GetAllAsync<User>();
+            var userId = users.FirstOrDefault()?.Id ?? Guid.Empty;
+
+            var affected = await connection.ExecuteAsync(sql, new
+            {
+                entity.EventId,
+                entity.MobileEventId,
+                entity.ElementId,
+                EventStatus = (int)entity.EventStatus,
+                entity.EmitedOn, // ISO 8601 format for SQLite
+                entity.SavedOn,   // ISO 8601 format for SQLite
+                UserId = userId,
+                entity.EventType,
+                entity.DataType,
+                entity.DataJson,
+                entity.ConflictWithJson
+            });
+
+            return affected > 0;
+        }
+        catch (Exception ex)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -85,11 +98,11 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
     {
         const string sql = @"
         DELETE FROM StoredEvents 
-        WHERE EventId = @EventId;";
+        WHERE MobileEventId = @MobileEventId;";
 
         using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new { EventId = id });
+        var affected = await connection.ExecuteAsync(sql, new { MobileEventId = id });
 
-        return  affected > 1;
+        return affected > 0;
     }
 }
