@@ -86,7 +86,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
     public async Task<IEnumerable<Package>> GetAllPackagesAsync(CancellationToken cancellationToken = default)
     {
         var result = await repository.GetAllAsync(cancellationToken: cancellationToken);
-        return result;
+        return result.Where(x => x.ConflictOfId == null);
     }
 
     public async Task<Package?> GetPackageByIdAsync(Guid id, CancellationToken cancellationToken = default)

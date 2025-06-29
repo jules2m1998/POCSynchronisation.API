@@ -17,8 +17,10 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
         }
 
         const string sql = @"
-            INSERT INTO Packages (Id, Reference, Weight, Volume, TareWeight, CreatedAt, LocationId)
-            VALUES (@Id, @Reference, @Weight, @Volume, @TareWeight, @CreatedAt, @LocationId);";
+            INSERT INTO Packages 
+                (Id, Reference, Weight, Volume, TareWeight, CreatedAt, LocationId, ConflictOfId)
+            VALUES 
+                (@Id, @Reference, @Weight, @Volume, @TareWeight, @CreatedAt, @LocationId, @ConflictOfId);";
 
         using var connection = _dbConnectionFactory.CreateConnection();
         var affected = await connection.ExecuteAsync(sql, new
@@ -29,8 +31,10 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
             entity.Volume,
             entity.TareWeight,
             entity.CreatedAt,
-            LocationId = entity.Location?.Id
+            LocationId = entity.Location?.Id,
+            entity.ConflictOfId
         });
+
 
         return affected > 0;
     }
@@ -67,7 +71,9 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
                 TareWeight REAL,
                 CreatedAt TEXT NOT NULL,
                 LocationId TEXT,
-                FOREIGN KEY (LocationId) REFERENCES Locations(Id)
+                ConflictOfId TEXT,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id),
+                FOREIGN KEY (ConflictOfId) REFERENCES Packages(Id)
             );
         """;
 
