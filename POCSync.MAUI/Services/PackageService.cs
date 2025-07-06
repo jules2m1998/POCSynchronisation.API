@@ -15,7 +15,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
     {
         var package = new Package
         {
-            Id = Guid.CreateVersion7(),
+            Id = Guid.NewGuid(),
             Reference = command.Reference,
             Weight = command.Weight,
             Volume = command.Volume,
@@ -132,7 +132,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
             ElementId = package.Id
         };
         var storedEvent = @createEvent.ToEventStore();
-        storedEvent.EventId = Guid.CreateVersion7();
+        storedEvent.EventId = Guid.NewGuid();
 
         var result = await eventStore.AddAsync(storedEvent, cancellationToken);
         if (!result) return;

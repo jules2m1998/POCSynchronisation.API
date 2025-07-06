@@ -5,6 +5,7 @@ using Infrastructure.Dapper.TypeHandlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Application;
+using Poc.Synchronisation.Domain.Abstractions;
 using POCSync.MAUI.Services;
 using POCSync.MAUI.Services.Abstractions;
 using POCSync.MAUI.Tools;
@@ -62,6 +63,7 @@ namespace POCSync.MAUI
 
             builder.Services.AddScoped<IPackageService, PackageService>();
             builder.Services.AddScoped<IPermissionManger, PermisionManager>();
+            builder.Services.AddTransient<IPlatformIdentifier, PlatformIdentifier>();
 
             var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
 

@@ -10,20 +10,25 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
 {
     public override async Task<bool> AddAsync(Package entity, CancellationToken cancellationToken = default)
     {
-        // Ensure we have a valid ID
         if (entity.Id == Guid.Empty)
-        {
             entity.Id = Guid.CreateVersion7();
-        }
-
-        const string sql = @"
-            INSERT INTO Packages 
-                (Id, Reference, Weight, Volume, TareWeight, CreatedAt, LocationId, ConflictOfId)
-            VALUES 
-                (@Id, @Reference, @Weight, @Volume, @TareWeight, @CreatedAt, @LocationId, @ConflictOfId);";
 
         using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new
+        await connection.ExecuteAsync("PRAGMA foreign_keys = OFF;");
+
+        string sqlWithLocation = @"
+        INSERT INTO Packages 
+            (Id, Reference, Weight, Volume, TareWeight, CreatedAt, LocationId, ConflictOfId)
+        VALUES 
+            (@Id, @Reference, @Weight, @Volume, @TareWeight, @CreatedAt, @LocationId, @ConflictOfId);";
+
+        string sqlWithoutLocation = @"
+        INSERT INTO Packages 
+            (Id, Reference, Weight, Volume, TareWeight, CreatedAt, ConflictOfId)
+        VALUES 
+            (@Id, @Reference, @Weight, @Volume, @TareWeight, @CreatedAt, @ConflictOfId);";
+
+        var parameters = new
         {
             entity.Id,
             entity.Reference,
@@ -33,11 +38,16 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
             entity.CreatedAt,
             LocationId = entity.Location?.Id,
             entity.ConflictOfId
-        });
+        };
 
+        var sql = entity.Location?.Id != null
+            ? sqlWithLocation
+            : sqlWithoutLocation;
 
+        var affected = await connection.ExecuteAsync(sql, parameters);
         return affected > 0;
     }
+
 
 
     public override async Task<IEnumerable<Package>> GetAllAsync(bool excludeDeleted = true, CancellationToken cancellationToken = default)
@@ -55,14 +65,15 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
     public async Task InitializeAsync()
     {
         using var connection = _dbConnectionFactory.CreateConnection();
-        var sql = """
-            PRAGMA foreign_keys = ON;
+        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
+        await connection.ExecuteAsync("""
+                CREATE TABLE IF NOT EXISTS Locations (
+                    Id TEXT NOT NULL PRIMARY KEY,
+                    Name TEXT NOT NULL
+                );
+            """);
 
-            CREATE TABLE IF NOT EXISTS Locations (
-                Id TEXT NOT NULL PRIMARY KEY,
-                Name TEXT NOT NULL
-            );
-
+        await connection.ExecuteAsync("""
             CREATE TABLE IF NOT EXISTS Packages (
                 Id TEXT NOT NULL PRIMARY KEY,
                 Reference TEXT NOT NULL,
@@ -70,14 +81,13 @@ public class PackageRepository(IDbConnectionFactory dbConnectionFactory)
                 Volume REAL,
                 TareWeight REAL,
                 CreatedAt TEXT NOT NULL,
-                LocationId TEXT,
+                LocationId TEXT NULL,
                 ConflictOfId TEXT,
                 FOREIGN KEY (LocationId) REFERENCES Locations(Id),
                 FOREIGN KEY (ConflictOfId) REFERENCES Packages(Id)
             );
-        """;
-
-        var result = await connection.ExecuteAsync(sql);
+            """);
     }
+
 
 }

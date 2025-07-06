@@ -1,10 +1,11 @@
 ﻿using Dapper;
 using Dommel;
+using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Domain.Events.Packages;
 
 namespace Infrastructure.Dapper.Repository;
 
-public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
+public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory, ILogger<StoredEventRepository> logger) :
     BaserRepository<StoredEvent, Guid>(dbConnectionFactory),
     IBaserepositoryWithInitialisation<StoredEvent, Guid>
 {
@@ -86,23 +87,5 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory) :
         {
             return false;
         }
-    }
-
-    /// <summary>
-    /// Deletes all stored events with the specified MobileEventId
-    /// </summary>
-    /// <param name="mobileEventId">The mobile event ID to delete</param>
-    /// <param name="cancellationToken">Optional cancellation token</param>
-    /// <returns>The number of records deleted</returns>
-    public override async Task<bool> DeleteByIdAsync(Guid id, CancellationToken cancellationToken = default)
-    {
-        const string sql = @"
-        DELETE FROM StoredEvents 
-        WHERE MobileEventId = @MobileEventId;";
-
-        using var connection = _dbConnectionFactory.CreateConnection();
-        var affected = await connection.ExecuteAsync(sql, new { MobileEventId = id });
-
-        return affected > 0;
     }
 }

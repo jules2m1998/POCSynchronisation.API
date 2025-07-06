@@ -22,7 +22,6 @@ public class UserRepository(IDbConnectionFactory dbConnectionFactory) :
         using var connection = _dbConnectionFactory.CreateConnection();
         // Create the Users table if it doesn't exist
         var createTableSql = @"
-                PRAGMA foreign_keys = ON;
                 CREATE TABLE IF NOT EXISTS Users (
                     Id TEXT NOT NULL PRIMARY KEY,
                     Name TEXT NOT NULL,

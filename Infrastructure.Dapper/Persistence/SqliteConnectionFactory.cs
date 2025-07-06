@@ -1,5 +1,4 @@
 ﻿using Dapper;
-using Infrastructure.Dapper.Abstractions;
 using Microsoft.Data.Sqlite;
 using System.Data;
 
