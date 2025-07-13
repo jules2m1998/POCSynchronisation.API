@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:model="clr-namespace:Poc.Synchronisation.Domain.Models;assembly=Poc.Synchronisation.Domain"
+             xmlns:modelLocal="clr-namespace:POCSync.MAUI.Models"
              xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
              x:DataType="viewmodel:PackageListViewModel"
              x:Class="POCSync.MAUI.Views.MainPage">
@@ -22,7 +23,7 @@
                 SelectionMode="None"
                 EmptyView="No packages found">
                 <CollectionView.ItemTemplate>
-                    <DataTemplate x:DataType="model:Package">
+                    <DataTemplate x:DataType="modelLocal:PackageModel">
                         <SwipeView>
                             <SwipeView.LeftItems>
                                 <SwipeItems>
@@ -47,6 +48,11 @@
                                        StrokeShape="RoundRectangle 8,8,8,8"
                                        Stroke="{AppThemeBinding Light=LightGray, Dark=DimGray}">
                                     <Grid Padding="0" ColumnDefinitions="125,*">
+                                        <Image Source="{Binding FirstImage}"
+                                             Aspect="AspectFill"
+                                             HeightRequest="125"
+                                             Grid.Column="0"
+                                             WidthRequest="125"/>
                                         <VerticalStackLayout
                                             VerticalOptions="Center"
                                             Grid.Column="1"

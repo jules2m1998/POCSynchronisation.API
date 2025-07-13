@@ -2,6 +2,7 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
+             xmlns:model="clr-namespace:POCSync.MAUI.Models"
              x:DataType="viewmodel:PackageFormViewModel"
              x:Class="POCSync.MAUI.Views.PackageFormPage"
              Title="PackageFormPage">
@@ -14,6 +15,54 @@
             <Label Text="{Binding PackageId}" 
                        FontSize="24" 
                        HorizontalOptions="Center"/>
+            <Image Source="{Binding FullPath}"
+                Aspect="AspectFit"
+                HeightRequest="300"
+                WidthRequest="300"/>
+
+            <HorizontalStackLayout Spacing="12">
+                <CollectionView ItemsSource="{Binding ImageSources}">
+                    <CollectionView.ItemsLayout>
+                        <LinearItemsLayout Orientation="Horizontal" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="model:ImageModel">
+                            <Border StrokeThickness="1" 
+                                    Stroke="LightGray" 
+                                    BackgroundColor="White"
+                                    StrokeShape="RoundRectangle 8" 
+                                    Margin="10">
+                                <Border.Shadow>
+                                    <Shadow Brush="Black" Opacity="0.1" Radius="5" Offset="0,2" />
+                                </Border.Shadow>
+                                <Grid Padding="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Image Source="{Binding Source}"
+                                         Aspect="AspectFill"
+                                         HeightRequest="150"
+                                         WidthRequest="150"/>
+
+                                    <Button Grid.Column="1" 
+                                            Text="🗑️" 
+                                            FontSize="16"
+                                            BackgroundColor="Transparent"
+                                            TextColor="Red"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:PackageFormViewModel}}, Path=DeleteImageCommand}"
+                                            CommandParameter="{Binding Path}"
+                                            />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+                
+                <Button Text="➕ Add" 
+                        VerticalOptions="Center"
+                        Command="{Binding AddImageCommand}"/>
+            </HorizontalStackLayout>
 
             <VerticalStackLayout Spacing="5">
                 <Label Text="Reference" FontAttributes="Bold"/>

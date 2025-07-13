@@ -20,6 +20,7 @@ public class UserRepository(IDbConnectionFactory dbConnectionFactory) :
     public async Task InitializeAsync()
     {
         using var connection = _dbConnectionFactory.CreateConnection();
+        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         // Create the Users table if it doesn't exist
         var createTableSql = @"
                 CREATE TABLE IF NOT EXISTS Users (

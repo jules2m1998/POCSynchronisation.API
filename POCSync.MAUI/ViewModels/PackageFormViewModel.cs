@@ -4,14 +4,26 @@ using Poc.Synchronisation.Application.Features.Packages.Commands.CreatePackage;
 using Poc.Synchronisation.Application.Features.Packages.Commands.UpdatePackage;
 using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
+using Poc.Synchronisation.Domain.Abstractions.Repositories;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 using Poc.Synchronisation.Domain.Models;
+using POCSync.MAUI.Models;
 using POCSync.MAUI.Services.Abstractions;
+using POCSync.MAUI.Tools;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
 
 [QueryProperty(nameof(PackageJson), "PackageJson")]
-public partial class PackageFormViewModel(IPackageService service, IBaseRepository<StoredEvent, Guid> storeEvent) : BaseViewModel
+public partial class PackageFormViewModel(
+    IPackageService service,
+    IDocumentService documentService,
+    IPackageImageService packageImageService,
+    IBaseRepository<StoredEvent, Guid> storeEvent,
+    IPackagerDocumentRepository packageDocumentRepo,
+    FileManager fileManager
+    ) : BaseViewModel
 {
     [ObservableProperty]
     private string reference;
@@ -35,11 +47,20 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
     [NotifyPropertyChangedFor(nameof(IsNotEditMode))]
     private bool isEditMode;
 
+    [ObservableProperty]
+    private ImageSource fullPath;
+
     public bool IsNotEditMode => !IsEditMode;
 
     [ObservableProperty]
     private string eventJson = string.Empty;
 
+    [ObservableProperty]
+    private bool isBusy;
+
+    [ObservableProperty]
+    private ObservableCollection<ImageModel> imageSources = [];
+    private IReadOnlyCollection<PackageDocument> docs { get; set; } = [];
     // Handle the deserialization when packageJson is set
     partial void OnPackageJsonChanged(string value)
     {
@@ -58,6 +79,21 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
                     TareWeight = package.TareWeight;
                     IsEditMode = true;
                     FillEvents(package);
+                    var documents = packageDocumentRepo.GetByPackageIdAsync(package.Id).Result;
+                    docs = documents;
+                    var paths = documents
+                        .Select(doc => doc.Document.StorageUrl)
+                        .Where(x => x != null)
+                        .Select(fileManager.GetImageSourceFromPath)
+                        .ToList();
+
+                    foreach (var path in paths)
+                    {
+                        if (path is not null)
+                        {
+                            ImageSources.Add(path);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -81,7 +117,7 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
             IsBusy = true;
 
             var command = new CreatePackageCommand(Guid.Empty, Reference, Weight ?? 0, Volume ?? 0, TareWeight ?? 0);
-            var result = await service.AddPackageAsync(command);
+            var result = await service.AddPackageAsync(command, [.. ImageSources.Select(x => x.Path)]);
 
             if (result)
             {
@@ -125,7 +161,7 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
             IsBusy = true;
 
             var command = new UpdatePackageCommand(PackageId.Value, Reference, Weight ?? 0, Volume ?? 0, TareWeight ?? 0);
-            var result = await service.UpdatePackageAsync(command);
+            var result = await service.UpdatePackageAsync(command, [.. ImageSources.Select(x => x.Path)]);
 
             if (result)
             {
@@ -147,6 +183,58 @@ public partial class PackageFormViewModel(IPackageService service, IBaseReposito
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    async Task OnAddImage()
+    {
+        // 1) Capture the photo
+        if (!MediaPicker.Default.IsCaptureSupported)
+            throw new NotSupportedException("Camera capture not supported on this device.");
+
+        var photo = await MediaPicker.Default.CapturePhotoAsync(
+            new MediaPickerOptions { Title = "Snap a photo" }
+        );
+
+        if (photo == null)
+            return;
+
+        using Stream source = await photo.OpenReadAsync();
+        var fileName = photo.FileName;
+        try
+        {
+            var path = await documentService.CreateDocumentAsync(source, fileName, ["packages"]);
+            var src = fileManager.GetImageSourceFromPath(path);
+            if (src is not null)
+            {
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    ImageSources.Add(src);
+                });
+
+            }
+        }
+        catch (Exception ex)
+        {
+            await Shell.Current.DisplayAlert("Error", $"Failed to save image: {ex.Message}", "OK");
+        }
+    }
+
+    [RelayCommand]
+    async Task Cancel()
+    {
+
+    }
+
+    [RelayCommand]
+    async Task OnDeleteImage(string path)
+    {
+        var itemToRemove = ImageSources.FirstOrDefault(x => x.Path == path);
+        if (itemToRemove is null)
+            return;
+        await documentService.DeleteDocumentAsync(path);
+        ImageSources.Remove(itemToRemove);
+
     }
 
     void FillEvents(Package package)

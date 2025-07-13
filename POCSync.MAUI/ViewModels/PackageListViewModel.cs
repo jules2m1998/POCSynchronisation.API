@@ -1,6 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
-using Infrastructure.Dapper.Services.Generated;
-using Poc.Synchronisation.Domain.Models;
+using POCSync.MAUI.Models;
 using POCSync.MAUI.Services.Abstractions;
 using POCSync.MAUI.Views;
 using System.Collections.ObjectModel;
@@ -10,7 +9,7 @@ namespace POCSync.MAUI.ViewModels;
 
 public partial class PackageListViewModel(IPackageService service) : BaseViewModel
 {
-    public ObservableCollection<Package> Packages { get; set; } = [];
+    public ObservableCollection<PackageModel> Packages { get; set; } = [];
 
     [RelayCommand]
     async Task LoadPackages()
@@ -42,7 +41,7 @@ public partial class PackageListViewModel(IPackageService service) : BaseViewMod
     }
 
     [RelayCommand]
-    async Task EditPackage(Package package)
+    async Task EditPackage(PackageModel package)
     {
         var navigationParameter = new Dictionary<string, object>
         {
@@ -53,7 +52,7 @@ public partial class PackageListViewModel(IPackageService service) : BaseViewMod
     }
 
     [RelayCommand]
-    async Task DeletePackage(Package package)
+    async Task DeletePackage(PackageModel package)
     {
         bool confirm = await Shell.Current.DisplayAlert(
                 "Confirm Delete",

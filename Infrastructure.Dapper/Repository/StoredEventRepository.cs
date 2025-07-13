@@ -12,6 +12,7 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory, ILo
     public async Task InitializeAsync()
     {
         using var connection = _dbConnectionFactory.CreateConnection();
+        await connection.ExecuteAsync("PRAGMA foreign_keys = ON;");
         var sql = """
             CREATE TABLE IF NOT EXISTS StoredEvents (
                 EventId TEXT NOT NULL PRIMARY KEY,

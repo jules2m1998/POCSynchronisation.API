@@ -4,14 +4,21 @@ using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
 using Poc.Synchronisation.Domain.Events.Packages;
 using Poc.Synchronisation.Domain.Models;
+using POCSync.MAUI.Models;
 using POCSync.MAUI.Services.Abstractions;
+using POCSync.MAUI.Tools;
 using System.Text.Json;
 
 namespace POCSync.MAUI.Services;
 
-public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepository<StoredEvent, Guid> eventStore) : IPackageService
+public class PackageService(
+    IBaseRepository<Package, Guid> repository,
+    IBaseRepository<StoredEvent, Guid> eventStore,
+    IPackageImageService packageImageService,
+    FileManager fileManager
+    ) : IPackageService
 {
-    public async Task<bool> AddPackageAsync(CreatePackageCommand command, CancellationToken cancellationToken = default)
+    public async Task<bool> AddPackageAsync(CreatePackageCommand command, string[] images, CancellationToken cancellationToken = default)
     {
         var package = new Package
         {
@@ -38,6 +45,8 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
             MobileEventId = newPackage.Id
         };
         _ = eventStore.AddAsync(@createEvent.ToEventStore(), cancellationToken);
+
+        await packageImageService.ApplyPackageImage(package.Id, images);
         return true;
     }
 
@@ -49,6 +58,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
             return false;
         }
         _ = CreateDeleteEvent(id, cancellationToken);
+        await packageImageService.CleanPackageImages(id);
         return true;
     }
 
@@ -83,10 +93,20 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
         _ = eventStore.AddAsync(@event.ToEventStore(), cancellationToken);
     }
 
-    public async Task<IEnumerable<Package>> GetAllPackagesAsync(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<PackageModel>> GetAllPackagesAsync(CancellationToken cancellationToken = default)
     {
         var result = await repository.GetAllAsync(cancellationToken: cancellationToken);
-        return result.Where(x => x.ConflictOfId == null);
+        ICollection<PackageModel> models = []; ;
+        foreach (var package in result)
+        {
+            if (package.ConflictOfId != null)
+            {
+                continue;
+            }
+            var model = await MapToPackageModel(package);
+            models.Add(model);
+        }
+        return models;
     }
 
     public async Task<Package?> GetPackageByIdAsync(Guid id, CancellationToken cancellationToken = default)
@@ -95,7 +115,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
         return result;
     }
 
-    public async Task<bool> UpdatePackageAsync(UpdatePackageCommand command, CancellationToken cancellationToken = default)
+    public async Task<bool> UpdatePackageAsync(UpdatePackageCommand command, string[] images, CancellationToken cancellationToken = default)
     {
         var package = await repository.GetByIdAsync(command.Id, cancellationToken: cancellationToken);
         if (package is null)
@@ -119,6 +139,7 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
             return false;
         }
         _ = CreateUpdateEvent(package, newPackage, cancellationToken);
+        await packageImageService.ApplyPackageImage(package.Id, images);
 
         return true;
     }
@@ -148,5 +169,20 @@ public class PackageService(IBaseRepository<Package, Guid> repository, IBaseRepo
         {
             await eventStore.DeleteByIdAsync(item.EventId, cancellationToken);
         }
+    }
+
+    private async Task<PackageModel> MapToPackageModel(Package package)
+    {
+        var documents = await packageImageService.GetByPackageIdAsync(package.Id);
+        var images = documents.Select(doc => fileManager.GetImageSourceFromPath(doc.Document.StorageUrl)).Where(x => x != null).ToList();
+        return new PackageModel
+        {
+            Id = package.Id,
+            Reference = package.Reference,
+            Weight = package.Weight,
+            Volume = package.Volume,
+            TareWeight = package.TareWeight,
+            Images = images
+        };
     }
 }

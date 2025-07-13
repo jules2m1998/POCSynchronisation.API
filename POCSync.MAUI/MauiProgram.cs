@@ -1,11 +1,15 @@
-﻿using Dapper;
+﻿using CommunityToolkit.Maui;
+using Dapper;
 using Infrastructure.Dapper;
 using Infrastructure.Dapper.Abstractions;
+using Infrastructure.Dapper.Services;
+using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.TypeHandlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Application;
 using Poc.Synchronisation.Domain.Abstractions;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 using POCSync.MAUI.Services;
 using POCSync.MAUI.Services.Abstractions;
 using POCSync.MAUI.Tools;
@@ -21,6 +25,7 @@ namespace POCSync.MAUI
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()
+                .UseMauiCommunityToolkit()
                 .ConfigureFonts(fonts =>
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -64,6 +69,12 @@ namespace POCSync.MAUI
             builder.Services.AddScoped<IPackageService, PackageService>();
             builder.Services.AddScoped<IPermissionManger, PermisionManager>();
             builder.Services.AddTransient<IPlatformIdentifier, PlatformIdentifier>();
+
+
+            builder.Services.AddScoped<IFileSystemPath, FileSystemPath>();
+            builder.Services.AddScoped<IDocumentService, DocumentService>();
+            builder.Services.AddScoped<IPackageImageService, PackageImageService>();
+            builder.Services.AddTransient<FileManager>();
 
             var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
 

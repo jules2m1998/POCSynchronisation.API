@@ -1,5 +1,6 @@
 ﻿using Infrastructure.Dapper.Services.EventIdUpdaters;
 using Infrastructure.Dapper.Services.Generated;
+using Poc.Synchronisation.Domain.Abstractions.Repositories;
 
 namespace Infrastructure.Dapper;
 
@@ -17,10 +18,15 @@ public static class DependecyInjection
         services.AddScoped<IBaseRepository<Package, Guid>, PackageRepository>();
         services.AddScoped<IBaseRepository<StoredEvent, Guid>, StoredEventRepository>();
         services.AddScoped<IBaseRepository<User, Guid>, UserRepository>();
+        services.AddScoped<IBaseRepository<Document, Guid>, DocumentRepository>();
+        services.AddScoped<IBaseRepository<PackageDocument, Guid>, PackageDocumentRepository>();
+        services.AddScoped<IPackagerDocumentRepository, PackageDocumentRepository>();
 
         services.AddScoped<IModelInitialiser, PackageRepository>();
         services.AddScoped<IModelInitialiser, StoredEventRepository>();
         services.AddScoped<IModelInitialiser, UserRepository>();
+        services.AddScoped<IModelInitialiser, PackageDocumentRepository>();
+        services.AddScoped<IModelInitialiser, DocumentRepository>();
 
 
         services.AddScoped<IEventIdUpdater, CreatePackageIdUpdater>();
