@@ -5,11 +5,85 @@
     "version": "1.0"
   },
   "paths": {
+    "/api/Files/upload": {
+      "post": {
+        "tags": ["Files"],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "File": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "Paths": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "encoding": {
+                "File": {
+                  "style": "form"
+                },
+                "Paths": {
+                  "style": "form"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadFileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/Synchronisation": {
       "post": {
-        "tags": [
-          "Synchronisation"
-        ],
+        "tags": ["Synchronisation"],
         "requestBody": {
           "content": {
             "application/json": {
@@ -58,9 +132,7 @@
     },
     "/api/Synchronisation/retrieve": {
       "get": {
-        "tags": [
-          "Synchronisation"
-        ],
+        "tags": ["Synchronisation"],
         "responses": {
           "200": {
             "description": "OK",
@@ -80,9 +152,7 @@
     },
     "/api/Synchronisation/NonSyncedEvents/{lastSyncedId}/{userId}": {
       "get": {
-        "tags": [
-          "Synchronisation"
-        ],
+        "tags": ["Synchronisation"],
         "parameters": [
           {
             "name": "lastSyncedId",
@@ -122,9 +192,7 @@
     },
     "/api/Synchronisation/LastSavedEventId/{userId}": {
       "get": {
-        "tags": [
-          "Synchronisation"
-        ],
+        "tags": ["Synchronisation"],
         "parameters": [
           {
             "name": "userId",
@@ -153,16 +221,6 @@
   },
   "components": {
     "schemas": {
-      "EventType": {
-        "enum": [
-          0,
-          1,
-          2,
-          3
-        ],
-        "type": "integer",
-        "format": "int32"
-      },
       "LastSavedEventIdDto": {
         "type": "object",
         "properties": {
@@ -206,7 +264,9 @@
             "format": "uuid"
           },
           "eventStatus": {
-            "$ref": "#/components/schemas/EventType"
+            "enum": ["Idle", "Success", "Error", "Conflict"],
+            "type": "string",
+            "x-enumNames": ["Idle", "Success", "Error", "Conflict"]
           },
           "emitedOn": {
             "type": "string",
@@ -321,8 +381,14 @@
             "type": "string",
             "format": "uuid"
           },
+          "userId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "eventStatus": {
-            "$ref": "#/components/schemas/EventType"
+            "enum": ["Idle", "Success", "Error", "Conflict"],
+            "type": "string",
+            "x-enumNames": ["Idle", "Success", "Error", "Conflict"]
           },
           "emitedOn": {
             "type": "string",
@@ -335,6 +401,19 @@
           "lastSyncEvent": {
             "type": "string",
             "format": "uuid"
+          },
+          "metadata": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UploadFileResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false

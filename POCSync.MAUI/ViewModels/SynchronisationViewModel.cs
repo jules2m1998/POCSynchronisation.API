@@ -1,7 +1,9 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Infrastructure.Dapper;
 using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.Repository;
+using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.Services.Generated;
 using Mapster;
 using Mediator.Abstractions;
@@ -10,12 +12,16 @@ using Poc.Synchronisation.Application;
 using Poc.Synchronisation.Application.Features.Synchronisation.Commands.Synchronisation;
 using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 using POCSync.MAUI.Extensions;
+using POCSync.MAUI.Models;
+using POCSync.MAUI.Services;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
+
 
 public partial class SynchronisationViewModel(
         IApi api,
@@ -25,7 +31,11 @@ public partial class SynchronisationViewModel(
         ISender sender,
         IDbConnectionFactory db,
         ILogger<SynchronisationViewModel> logger,
-        IEnumerable<IEventIdUpdater> IdUpdaters
+        IEnumerable<IEventIdUpdater> IdUpdaters,
+        IFileTransferService fileTransferService,
+        IDBForeignKeyMode keyMod,
+        DatabaseInitializer _databaseInitializer,
+        SynchronisationService synchronisationService
     ) : BaseViewModel
 {
     [ObservableProperty]
@@ -44,6 +54,21 @@ public partial class SynchronisationViewModel(
     [ObservableProperty]
     string storedEventJson = "";
 
+    [ObservableProperty]
+    int countDataToSync = 0;
+
+    [ObservableProperty]
+    int countDocToSync = 0;
+
+    [ObservableProperty]
+    private ObservableCollection<SynchroStep> synchroSteps = [];
+
+    [ObservableProperty]
+    private SynchroReport report = new();
+
+    [ObservableProperty]
+    bool isThereSomethingToSync = true;
+
     public bool IsNotInitialisation => !IsInitialisation;
 
     private User? user { get; set; }
@@ -53,6 +78,16 @@ public partial class SynchronisationViewModel(
     {
         logger.LogInformation("Starting initialization process");
         var stopwatch = Stopwatch.StartNew();
+        var info = await synchronisationService.GetSynchronisationInfoAsync();
+        if (info.TotalEvents > 0 || info.TotalDocumentsToSync > 0)
+        {
+            CountDataToSync = info.TotalEvents;
+            CountDocToSync = info.TotalDocumentsToSync;
+        }
+        else
+        {
+            IsThereSomethingToSync = false;
+        }
 
         try
         {
@@ -79,6 +114,7 @@ public partial class SynchronisationViewModel(
 
             logger.LogInformation("User requires initialization");
             IsInitialisation = true;
+            IsThereSomethingToSync = true;
 
             var allEvents = await storeEventRepo.GetAllAsync();
             logger.LogInformation("Retrieved {EventCount} stored events for JSON serialization", allEvents.Count());
@@ -101,40 +137,60 @@ public partial class SynchronisationViewModel(
     [RelayCommand]
     async Task Retrieve()
     {
-        logger.LogInformation("Starting data retrieval process");
-        var stopwatch = Stopwatch.StartNew();
+        db.CleanDb();
+        await _databaseInitializer.InitializeDatabaseAsync();
+        await Initialisation();
+
+        SynchroSteps.Clear();
         IsBusy = true;
+        var stopwatch = Stopwatch.StartNew();
+        logger.LogInformation("Starting data retrieval process");
 
         try
         {
-            // Call the API to synchronise data
-            CurrentProgress = 0.5;
-            ProgressTitle = "Retrieving data.";
-            logger.LogInformation("Calling API to retrieve data");
+            // Step 1 - Retrieve data from API
+            var step1 = CreateStep("Récupération des données du serveur", "Données en cours de récupération", 0.1);
+            SynchroSteps.Add(step1);
+
+            ProgressTitle = "Retrieving data...";
+            CurrentProgress = 0.2;
 
             var data = await api.Retrieve();
-            logger.LogInformation("Successfully retrieved {DataCount} items from API", data?.Count ?? 0);
+            var itemCount = data?.Count ?? 0;
 
+            UpdateStep(step1, $"{itemCount} élément(s) récupéré(s) avec succès !", 0.5);
+
+            logger.LogInformation("Retrieved {DataCount} items from API", itemCount);
+
+            // Step 2 - Save data to DB
+            ProgressTitle = "Saving data...";
             CurrentProgress = 0.6;
-            ProgressTitle = "Saving data";
 
-            var storedData = data.Adapt<ICollection<StoredRetiever>>();
+            var storedData = data?.Adapt<ICollection<StoredRetiever>>() ?? [];
             logger.LogInformation("Mapped {StoredDataCount} items for initialization", storedData.Count);
 
+            UpdateStep(step1, "Sauvegarde des données en base de données...", 0.6);
+
+            await keyMod.Off();
             var result = await initialiser.Initialise(storedData);
-            logger.LogInformation("Initialization completed with result: {Result}", result);
+            await keyMod.On();
 
-            CurrentProgress = 1;
-            ProgressTitle = "Saving ended";
+            logger.LogInformation("Data initialization result: {Result}", result);
 
+            UpdateStep(step1, "Données sauvegardées avec succès", 1.0, isCompleted: true);
+
+            CurrentProgress = 0.8;
+            ProgressTitle = "Saving complete";
+            await DownloadFolders();
+
+            // Step 4 - Update user
             if (user is not null)
             {
-                logger.LogInformation("Updating user {UserId} with last saved event", user.Id);
+                logger.LogInformation("Updating user {UserId}...", user.Id);
                 var response = await api.LastSavedEventId(user.Id);
 
                 if (response is not null)
                 {
-                    logger.LogInformation("Retrieved last saved event ID: {EventId}", response.Id);
                     user.LastEventSynced = response.Id ?? Guid.Empty;
                     user.IsInitialised = true;
 
@@ -145,30 +201,46 @@ public partial class SynchronisationViewModel(
                 }
                 else
                 {
-                    logger.LogWarning("API returned null response for LastSavedEventId");
+                    logger.LogWarning("LastSavedEventId returned null for user {UserId}", user.Id);
                 }
             }
             else
             {
-                logger.LogWarning("User is null, cannot update last saved event");
+                logger.LogWarning("User is null, cannot update.");
             }
         }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during data retrieval process");
-            await Shell.Current.DisplayAlert("Error", $"An error occurred during data retrieval: {ex.Message}", "OK");
+            await Shell.Current.DisplayAlert("Erreur", $"Une erreur s'est produite : {ex.Message}", "OK");
         }
         finally
         {
             IsBusy = false;
             stopwatch.Stop();
-            logger.LogInformation("Data retrieval completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("Data retrieval finished in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
         }
+    }
+
+    private async Task DownloadFolders()
+    {
+        // Step 3 - Download files
+        var step2 = CreateStep("Téléchargement des fichiers du serveur", "Initialisation du téléchargement...", 0.1);
+        SynchroSteps.Add(step2);
+
+        await foreach (var (description, progress) in fileTransferService.DownloadFiles())
+        {
+            UpdateStep(step2, description, progress);
+            logger.LogInformation("File download progress: {Description} - {Progress:P0}", description, progress);
+        }
+
+        UpdateStep(step2, "📁 Fichiers téléchargés avec succès !", 1.0, isCompleted: true);
     }
 
     [RelayCommand]
     async Task Synchronise()
     {
+        SynchroSteps.Clear();
         logger.LogInformation("Starting synchronization process for user {UserId}", user?.Id);
         var stopwatch = Stopwatch.StartNew();
         IsBusy = true;
@@ -176,20 +248,28 @@ public partial class SynchronisationViewModel(
         try
         {
             await SendEventsAsync();
-            var allEvents = await storeEventRepo.GetAllAsync();
-
             ProgressTitle = "Fetching events";
-            logger.LogInformation("Fetching non-synced events from server. LastEventSynced: {LastEventId}",
-                user?.LastEventSynced ?? Guid.Empty);
+            logger.LogInformation("Fetching non-synced events from server. LastEventSynced: {LastEventId}", user?.LastEventSynced ?? Guid.Empty);
 
-            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty, user.Id);
+            if (user is null)
+            {
+                logger.LogWarning("User is null, cannot fetch non-synced events");
+                return;
+            }
+
+            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty, user!.Id);
             logger.LogInformation("Retrieved {EventCount} non-synced events from server", result?.Count ?? 0);
+            Report.TotalEventToApply = result?.Count ?? 0;
+            Report.Isvisible = true;
 
             var eventsToSync = result.Adapt<ICollection<StoredEvent>>();
             logger.LogInformation("Mapped {EventCount} events for synchronization", eventsToSync.Count);
 
             await ApplyEventAsync(eventsToSync);
             logger.LogInformation("Synchronization process completed successfully");
+
+            await PushFilesAsync();
+            await DownloadFolders();
         }
         catch (Exception ex)
         {
@@ -213,7 +293,38 @@ public partial class SynchronisationViewModel(
 
             stopwatch.Stop();
             logger.LogInformation("Synchronization completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            await Initialisation();
         }
+    }
+
+    private async Task PushFilesAsync()
+    {
+        var currentStep = new SynchroStep
+        {
+            Step = "",
+            Description = "",
+            Progress = 0.0,
+            IsCompleted = false
+        };
+        await foreach (var (description, progress, isNewStep, stepTitle, total) in fileTransferService.UploadFiles())
+        {
+            if (total.HasValue)
+            {
+                Report.TotalDocumentToSync = total.Value;
+            }
+            Report.TotalDocumentSynced += 1;
+
+            if (isNewStep && stepTitle != null)
+            {
+                currentStep.IsCompleted = true;
+                currentStep = CreateStep(stepTitle, description, progress);
+                SynchroSteps.Add(currentStep);
+                continue;
+            }
+            currentStep.Description = description;
+            currentStep.Progress = progress;
+        }
+        currentStep.IsCompleted = true;
     }
 
     [RelayCommand]
@@ -243,6 +354,45 @@ public partial class SynchronisationViewModel(
             stopwatch.Stop();
             logger.LogInformation("Table reset completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
         }
+    }
+
+    [RelayCommand]
+    async Task OnRunProgress()
+    {
+        SynchroSteps.Clear();
+        var step1 = new SynchroStep
+        {
+            Step = "Test",
+            Description = "Test",
+            IsCompleted = false,
+            Progress = 0.1
+        };
+
+        SynchroSteps.Add(step1);
+
+
+        await Task.Delay(2000);
+        step1.Step = "Test 2";
+        step1.Description = "Hello";
+        step1.Progress = 0.5;
+
+        await Task.Delay(2000);
+        step1.Step = "Test 3";
+        step1.Description = "Hello world";
+        step1.Progress = 0.8;
+
+
+        var step2 = new SynchroStep
+        {
+            Step = "Test 3333",
+            Description = "Test",
+            IsCompleted = false,
+            Progress = 0.9
+        };
+
+
+        SynchroSteps.Add(step2);
+
     }
 
     private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
@@ -280,6 +430,7 @@ public partial class SynchronisationViewModel(
 
                 processedEvents += batchList.Count;
                 iteration++;
+                Report.TotalEventApplied += batchList.Count;
             }
 
             ProgressTitle = "Saving ended";
@@ -314,194 +465,139 @@ public partial class SynchronisationViewModel(
 
     private async Task SendEventsAsync()
     {
-        logger.LogInformation("Starting to send events to server");
+        logger.LogInformation("🔄 Starting to send events to server");
         var stopwatch = Stopwatch.StartNew();
-        var resultEventa = new List<StoredEvent>();
-        var processedBatches = 0;
+
+        var resultEvents = new List<StoredEvent>();
         var deletedEvents = 0;
+        var processedBatches = 0;
 
         try
         {
             CurrentProgress = 0.0;
-            ProgressTitle = "Synchronising data.";
+            ProgressTitle = "Synchronisation des données...";
 
-            var events = await storeEventRepo.GetAllAsync();
-            var eventId = events.FirstOrDefault()?.EventId;
-            var MobileEventId = events.FirstOrDefault()?.MobileEventId;
-            var eventsArray = events.ToArray();
-            logger.LogInformation("Retrieved {EventCount} events to send to server", eventsArray.Length);
+            // Step 1: Fetch Events
+            var getEventsStep = CreateStep("Récupération des actions à synchroniser", "🔄 Initialisation...", 0);
+            SynchroSteps.Add(getEventsStep);
 
-            var total = eventsArray.Length;
+            var events = (await storeEventRepo.GetAllAsync()).ToArray();
+            Report.TotalEventToSync = events.Length;
+            Report.TotalEventSynced = 0;
+
+            UpdateStep(getEventsStep, $"📁 {events.Length} action(s) récupérée(s) avec succès", 1.0, true);
+
+            if (events.Length == 0)
+            {
+                logger.LogInformation("Aucune action à synchroniser");
+                return;
+            }
+
+            var sendStep = CreateStep("Envoi des données au serveur", "Préparation...", 0.0);
+            SynchroSteps.Add(sendStep);
+
+            // Step 2: Send in batches
+            var batchSize = 10;
+            var totalBatches = (int)Math.Ceiling(events.Length / (double)batchSize);
             var iteration = 0;
 
-            foreach (var batch in eventsArray.Batch(10))
+            foreach (var batch in events.Batch(batchSize))
             {
-                var batchList = batch.ToList();
-                logger.LogDebug("Sending batch {BatchNumber}/{TotalBatches} with {BatchSize} events",
-                    iteration + 1, (total + 9) / 10, batchList.Count);
-
-                var dto = batchList.Adapt<List<SynchronisedStoredEventDto>>();
-                var request = new SynchronisationRequest
+                iteration++;
+                var dtoBatch = batch.Select(e =>
                 {
-                    Events = [.. dto.Select(x =>
-                    {
-                        x.LastSyncEvent = user?.LastEventSynced ?? Guid.Empty;
-                        return x;
-                    })]
-                };
+                    var dto = e.Adapt<SynchronisedStoredEventDto>();
+                    dto.LastSyncEvent = user?.LastEventSynced ?? Guid.Empty;
+                    return dto;
+                }).ToList();
 
-                logger.LogDebug("Sending synchronization request with {request}", JsonSerializer.Serialize(request));
-                var data = await SynchronizeWithServerAsync(request);
-                logger.LogDebug("Server responded with {data}", JsonSerializer.Serialize(data));
+                var request = new SynchronisationRequest { Events = dtoBatch };
 
-                var createEvents = data?
-                    .Results?
-                    .Where(x => x.EventType.StartsWith("create", StringComparison.CurrentCultureIgnoreCase))
+                logger.LogDebug("Sending batch {Batch}/{Total}", iteration, totalBatches);
+                var response = await api.Synchronisation(request);
+                logger.LogDebug("Received server response");
+
+                var createdEvents = response?.Results?
+                    .Where(x => x.EventType.StartsWith("create", StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
-                logger.LogDebug("Found {createEvents} create events in response", JsonSerializer.Serialize(createEvents));
-                resultEventa.AddRange(createEvents.Adapt<List<StoredEvent>>());
+                if (createdEvents?.Count > 0)
+                    resultEvents.AddRange(createdEvents.Adapt<List<StoredEvent>>());
 
-                iteration++;
-                var progress = (double)iteration / total;
-                processedBatches++;
-
-                var batchDeletedCount = 0;
-
-                foreach (var result in data.Results)
+                // Delete successful or conflict events
+                foreach (var result in response.Results)
                 {
-                    if (result.EventStatus == EventType.Success || result.EventStatus == EventType.Conflict)
+                    if (result.EventStatus is SynchronisedStoredEventDtoEventStatus.Success or SynchronisedStoredEventDtoEventStatus.Conflict)
                     {
-                        var id = result.EventId;
-                        var deleteResult = await storeEventRepo.DeleteByIdAsync(id);
-                        if (deleteResult)
-                        {
-                            batchDeletedCount++;
+                        if (await storeEventRepo.DeleteByIdAsync(result.EventId))
                             deletedEvents++;
-                        }
-                        logger.LogDebug("Deleted event {EventId}, success: {DeleteSuccess}", id, deleteResult);
                     }
                 }
 
-                logger.LogDebug("Batch {BatchNumber} completed: deleted {DeletedCount} events",
-                    iteration, batchDeletedCount);
-                CurrentProgress = progress * 0.6;
+                processedBatches++;
+                var progress = (double)iteration / totalBatches;
+                CurrentProgress = progress * 0.6; // up to 60%
+                UpdateStep(sendStep, $"Envoi: {Math.Round(progress * 100)}%", progress);
+                Report.TotalEventSynced += batch.Count;
+                Report.TotalConflict += response.Results?.Count(x => x.EventStatus == SynchronisedStoredEventDtoEventStatus.Conflict) ?? 0;
             }
 
-            logger.LogInformation("Successfully sent {ProcessedBatches} batches, deleted {DeletedEvents} events, created {CreatedEvents} new events",
-                processedBatches, deletedEvents, resultEventa.Count);
+            UpdateStep(sendStep, "📁 Données envoyées avec succès ✅", 1.0, true);
+            logger.LogInformation("📤 Sent {ProcessedBatches} batches, deleted {DeletedEvents} events", processedBatches, deletedEvents);
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Error sending events to server. Processed {ProcessedBatches} batches, deleted {DeletedEvents} events",
-                processedBatches, deletedEvents);
-            await Shell.Current.DisplayAlert("Error", $"An error occurred while sending events: {ex.Message}", "OK");
+            logger.LogError(ex, "Erreur pendant la synchronisation des événements");
+            await Shell.Current.DisplayAlert("Erreur", $"Une erreur est survenue : {ex.Message}", "OK");
+            return;
+        }
+
+        // Step 3: Reconciliation
+        try
+        {
+            var reconciliationStep = CreateStep("Réconciliation des données serveur", "En cours...", 0.0);
+            SynchroSteps.Add(reconciliationStep);
+
+            var index = 0;
+            var count = IdUpdaters.Count();
+
+            foreach (var updater in IdUpdaters)
+            {
+                var result = await updater.UpdateEventId(resultEvents);
+                index++;
+                var progress = (double)index / count;
+                UpdateStep(reconciliationStep, $"Réconciliation: {Math.Round(progress * 100)}%", progress);
+                logger.LogDebug("Updater {Type} finished: {Result}", updater.GetType().Name, result);
+            }
+
+            UpdateStep(reconciliationStep, "🤝 Réconciliation terminée ✅", 1.0, true);
+            logger.LogInformation("✅ Event ID update completed");
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Erreur pendant la mise à jour des Event IDs");
         }
         finally
         {
-            try
-            {
-                logger.LogInformation("Found {UpdaterCount} event ID updaters, updating {ResultEventCount} events",
-                    IdUpdaters.Count(), resultEventa.Count);
-
-                foreach (var service in IdUpdaters)
-                {
-                    var result = await service.UpdateEventId(resultEventa);
-                    logger.LogDebug("Event ID updater {UpdaterType} completed with result: {Result}",
-                        service.GetType().Name, result);
-                }
-
-                logger.LogInformation("Event ID update process completed");
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error updating event IDs");
-            }
-
             stopwatch.Stop();
-            logger.LogInformation("SendEventsAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            logger.LogInformation("✅ SendEventsAsync terminé en {Elapsed}ms", stopwatch.ElapsedMilliseconds);
+            IsBusy = false;
         }
     }
 
-    private async Task<SynchronisationResponse> SynchronizeWithServerAsync(SynchronisationRequest request)
+    private SynchroStep CreateStep(string step, string description, double progress) =>
+    new()
     {
-        logger.LogInformation("Starting server synchronization with {EventCount} events", request.Events?.Count ?? 0);
-        var stopwatch = Stopwatch.StartNew();
+        Step = step,
+        Description = description,
+        Progress = progress,
+        IsCompleted = false
+    };
 
-        try
-        {
-            // Create a handler that accepts all certificates (WARNING: ONLY FOR DEVELOPMENT)
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-            };
-
-            // For Android specifically, use AndroidMessageHandler
-            if (DeviceInfo.Platform == DevicePlatform.Android)
-            {
-                logger.LogDebug("Using Android-specific HTTP handler");
-                handler = new()
-                {
-                    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-                };
-            }
-
-            using var httpClient = new HttpClient(handler);
-            var baseUrl = "https://localhost:7199/";
-            httpClient.BaseAddress = new Uri(baseUrl);
-            logger.LogDebug("HTTP client configured with base URL: {BaseUrl}", baseUrl);
-
-            // Configure headers
-            httpClient.DefaultRequestHeaders.Accept.Add(
-                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-            // Serialize the request
-            var jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = false
-            };
-
-            var jsonContent = JsonSerializer.Serialize(request, jsonOptions);
-            logger.LogDebug("Serialized request size: {RequestSize} characters", jsonContent.Length);
-
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            logger.LogInformation("Sending POST request to api/Synchronisation");
-            var response = await httpClient.PostAsync("api/Synchronisation", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                logger.LogInformation("Received successful response with {ResponseSize} characters", responseContent.Length);
-
-                var result = JsonSerializer.Deserialize<SynchronisationResponse>(responseContent, jsonOptions);
-                logger.LogInformation("Deserialized response with {ResultCount} results", result?.Results?.Count ?? 0);
-
-                return result;
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                logger.LogError("Synchronization failed with status {StatusCode}: {ErrorContent}",
-                    response.StatusCode, errorContent);
-
-                throw new HttpRequestException(
-                    $"Synchronization failed with status code {response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error during server synchronization");
-            await Shell.Current.DisplayAlert("Error", $"An error occurred while synchronizing with server: {ex.Message}", "OK");
-            throw;
-        }
-        finally
-        {
-            stopwatch.Stop();
-            logger.LogInformation("SynchronizeWithServerAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
-        }
+    private void UpdateStep(SynchroStep step, string description, double progress, bool isCompleted = false)
+    {
+        step.Description = description;
+        step.Progress = progress;
+        step.IsCompleted = isCompleted;
     }
 }

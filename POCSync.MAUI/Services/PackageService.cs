@@ -39,12 +39,8 @@ public class PackageService(
         {
             return false;
         }
-        var @createEvent = new CreatePackageEvent
-        {
-            Data = newPackage,
-            MobileEventId = newPackage.Id
-        };
-        _ = eventStore.AddAsync(@createEvent.ToEventStore(), cancellationToken);
+        var @event = CreatePackageEvent.From(newPackage, images);
+        _ = eventStore.AddAsync(@event.ToEventStore(), cancellationToken);
 
         await packageImageService.ApplyPackageImage(package.Id, images);
         return true;
@@ -138,20 +134,15 @@ public class PackageService(
         {
             return false;
         }
-        _ = CreateUpdateEvent(package, newPackage, cancellationToken);
+        _ = CreateUpdateEvent(package, newPackage, cancellationToken, images);
         await packageImageService.ApplyPackageImage(package.Id, images);
 
         return true;
     }
 
-    private async Task CreateUpdateEvent(Package package, Package newPackage, CancellationToken cancellationToken)
+    private async Task CreateUpdateEvent(Package package, Package newPackage, CancellationToken cancellationToken, string[] images)
     {
-        var @createEvent = new UpdatePackageEvent
-        {
-            Data = newPackage,
-            MobileEventId = package.Id,
-            ElementId = package.Id
-        };
+        var @createEvent = UpdatePackageEvent.From(package, newPackage, images);
         var storedEvent = @createEvent.ToEventStore();
         storedEvent.EventId = Guid.NewGuid();
 
@@ -182,7 +173,7 @@ public class PackageService(
             Weight = package.Weight,
             Volume = package.Volume,
             TareWeight = package.TareWeight,
-            Images = images
+            Images = images.Where(x => x != null).ToList()!
         };
     }
 }

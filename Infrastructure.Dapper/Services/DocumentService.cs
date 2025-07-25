@@ -1,17 +1,55 @@
-﻿namespace Infrastructure.Dapper.Services;
-
+﻿using Dapper;
 using Infrastructure.Dapper.Services.Abstractions;
+using Infrastructure.Dapper.Services.Generated;
 using Microsoft.Extensions.Logging;
-using Poc.Synchronisation.Domain.Abstractions.Services;  // Adjust to your project's namespace
-using System;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 
-public class DocumentService(ILogger<DocumentService> logger, IFileSystemPath systemPath) : IDocumentService
+namespace Infrastructure.Dapper.Services;
+
+public class DocumentService(
+    ILogger<DocumentService> logger,
+    IFileSystemPath systemPath,
+    IDbConnectionFactory dbConnectionFactory,
+    IApi api,
+    IHttpClientFactory clientBuilder,
+    IPermissionManger permissionManger
+) : IDocumentService, IFileTransferService
 {
+    const string sqlGetAllNonSyncFilePaths = """
+        SELECT StorageUrl
+        FROM Documents
+        WHERE IsSynced = 0
+        AND FileName LIKE (
+            SELECT REPLACE(Name, ' ', '_') || '%'
+            FROM Users
+            LIMIT 1
+        );
+    """;
+
+    const string sqlGetNonUserFilePaths = @"
+        SELECT StorageUrl
+        FROM Documents
+        WHERE IsSynced = 0
+        AND FileName NOT LIKE (
+            SELECT REPLACE(Name, ' ', '_') || '%'
+            FROM Users
+            LIMIT 1
+        );
+    ";
+
+    const string sqlUpdateDocumentSyncStatus = """
+        UPDATE Documents
+        SET IsSynced = 1
+        WHERE StorageUrl = @StorageUrl;
+    """;
+
+    const string sqlGetUserId = """
+        SELECT REPLACE(Name, ' ', '_') AS Name FROM Users LIMIT 1
+    """;
+
     private readonly ILogger<DocumentService> _logger = logger;
     private readonly string _basePath = Path.Combine(systemPath.BasePath(), "wasteflow-images");
+    private readonly HttpClient fileClient = clientBuilder.CreateClient("FileDownloadClient");
 
     public async Task<string> CreateDocumentAsync(Stream stream, string fileName, string[] treeFolder)
     {
@@ -68,7 +106,7 @@ public class DocumentService(ILogger<DocumentService> logger, IFileSystemPath sy
             throw new ArgumentException("File name cannot be empty.", nameof(fileName));
     }
 
-    private static string BuildRelativePath(string fileName, string[] treeFolder)
+    private string BuildRelativePath(string fileName, string[] treeFolder)
     {
         // Sanitize file name
         var safeName = SanitizeFileName(fileName);
@@ -78,7 +116,7 @@ public class DocumentService(ILogger<DocumentService> logger, IFileSystemPath sy
 
         // Sanitize and combine folders
         var parts = (treeFolder ?? [])
-            .Select(f => SanitizeFolderName(f))
+            .Select(SanitizeFolderName)
             .Where(f => !string.IsNullOrEmpty(f))
             .ToList();
         parts.Add(safeName);
@@ -86,11 +124,13 @@ public class DocumentService(ILogger<DocumentService> logger, IFileSystemPath sy
         return Path.Combine([.. parts]);
     }
 
-    private static string SanitizeFileName(string fileName)
+    private string SanitizeFileName(string fileName)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var cleaned = new string([.. fileName.Where(c => !invalid.Contains(c))]);
-        return string.IsNullOrWhiteSpace(cleaned) ? Guid.NewGuid().ToString() : cleaned;
+        var shortGuid = Guid.NewGuid().ToString("N")[..8];
+        var userName = GetUserNameAsync().Result ?? "unknown_user";
+        var extension = Path.GetExtension(fileName);
+
+        return $"{userName}_{shortGuid}{extension}";
     }
 
     private static string SanitizeFolderName(string folderName)
@@ -108,6 +148,150 @@ public class DocumentService(ILogger<DocumentService> logger, IFileSystemPath sy
     }
 
     public string GetBaseUrl() => _basePath;
+
+    public async IAsyncEnumerable<(string description, double progress, bool isNewStep, string? stepTitle, int? total)> UploadFiles()
+    {
+        // STEP 1: FETCH FILES
+        yield return ("Initialisation de la récupération des fichiers à uploader...", 0.0, true, "Récupération des fichiers", null);
+
+        var connection = dbConnectionFactory.CreateConnection();
+        var nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetAllNonSyncFilePaths)).ToArray();
+
+        var totalFiles = nonSyncedFiles.Length;
+
+        if (totalFiles == 0)
+        {
+            yield return ("Aucun fichier à uploader. Étape terminée ✅", 1.0, false, null, null);
+            yield break;
+        }
+
+        yield return ($"📁 {totalFiles} fichier(s) à uploader récupéré(s).", 1.0, false, null, totalFiles);
+
+
+        // STEP 2: UPLOAD FILES
+        yield return ("Début de l'upload des fichiers vers le serveur...", 0.0, true, "Upload des fichiers", null);
+
+        var failure = new List<string>();
+        var success = new List<string>();
+
+        int index = 0;
+        foreach (var url in nonSyncedFiles)
+        {
+            var path = Path.Combine(_basePath, url);
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                _logger.LogWarning("Fichier introuvable ou chemin invalide : {Path}", path);
+                failure.Add(url);
+                yield return ($"❌ Fichier introuvable : {url}", (double)index / totalFiles, false, null, null);
+                index++;
+                continue;
+            }
+
+            using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
+            var fileName = Path.GetFileName(path);
+            var streamPart = new StreamPart(fileStream, fileName, "application/octet-stream");
+
+            var directory = Path.GetDirectoryName(url);
+            var folders = directory?.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries) ?? [];
+
+            var result = await api.Upload(streamPart, folders);
+            if (!result.Success)
+            {
+                failure.Add(url);
+                yield return ($"❌ Échec de l'upload : {fileName}", (double)index / totalFiles, false, null, null);
+                index++;
+                continue;
+            }
+
+            var update = await connection.ExecuteAsync(
+                sqlUpdateDocumentSyncStatus,
+                new { StorageUrl = url }
+            );
+
+            if (update == 0)
+            {
+                _logger.LogWarning("Échec de la mise à jour du statut de synchronisation pour : {Path}", path);
+                failure.Add(url);
+                yield return ($"❌ Upload réussi mais mise à jour échouée : {fileName}", (double)index / totalFiles, false, null, null);
+            }
+            else
+            {
+                success.Add(url);
+                yield return ($"✅ {fileName} uploadé avec succès", (double)index / totalFiles, false, null, null);
+            }
+
+            index++;
+        }
+
+        yield return ($"📦 Upload terminé. {success.Count} succès, {failure.Count} échecs.", 1.0, false, null, null);
+    }
+
+
+    private async Task<string?> GetUserNameAsync()
+    {
+        try
+        {
+            using var connection = dbConnectionFactory.CreateConnection();
+            var userName = await connection.QueryFirstOrDefaultAsync<string?>(sqlGetUserId);
+            return userName;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving user ID");
+            return string.Empty;
+        }
+    }
+
+    public async IAsyncEnumerable<(string, double)> DownloadFiles()
+    {
+        var permissionGranted = await permissionManger.CheckAndRequestStoragePermission();
+        if (!permissionGranted)
+        {
+            yield return ("Action non autorisée !", 1.0);
+            yield break;
+        }
+
+        var connection = dbConnectionFactory.CreateConnection();
+        var nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetNonUserFilePaths)).ToArray();
+
+        yield return ($"{nonSyncedFiles.Length} fichier(s) à synchroniser", 0.1);
+
+        if (nonSyncedFiles.Length == 0)
+        {
+            yield return ("Aucun fichier à télécharger", 1.0);
+            yield break;
+        }
+
+        var result = new List<string>();
+        double step = 0.9 / nonSyncedFiles.Length;
+        double progress = 0.1;
+
+        foreach (var path in nonSyncedFiles)
+        {
+            using var response = await fileClient.GetAsync(path);
+            response.EnsureSuccessStatusCode();
+
+            var fullPath = Path.Combine(_basePath, path);
+            var directory = Path.GetDirectoryName(fullPath);
+            if (directory is not null && !Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+
+            using var stream = File.OpenWrite(fullPath);
+            await response.Content.CopyToAsync(stream);
+
+            result.Add(fullPath);
+
+            await connection.ExecuteAsync(
+                sqlUpdateDocumentSyncStatus,
+                new { StorageUrl = path }
+            );
+
+            progress += step;
+            yield return ($"Téléchargé: {Path.GetFileName(path)}", Math.Min(progress, 0.99));
+        }
+
+        yield return ("Téléchargement terminé", 1.0);
+    }
 
     #endregion
 }

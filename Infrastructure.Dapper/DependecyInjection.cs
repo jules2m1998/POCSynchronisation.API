@@ -21,6 +21,7 @@ public static class DependecyInjection
         services.AddScoped<IBaseRepository<Document, Guid>, DocumentRepository>();
         services.AddScoped<IBaseRepository<PackageDocument, Guid>, PackageDocumentRepository>();
         services.AddScoped<IPackagerDocumentRepository, PackageDocumentRepository>();
+        services.AddScoped<ISynchronisationRepository, SynchronisationRepository>();
 
         services.AddScoped<IModelInitialiser, PackageRepository>();
         services.AddScoped<IModelInitialiser, StoredEventRepository>();
@@ -42,7 +43,8 @@ public static class DependecyInjection
             {
                 ServerCertificateCustomValidationCallback =
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            });
+            }
+        );
         return services;
     }
 }

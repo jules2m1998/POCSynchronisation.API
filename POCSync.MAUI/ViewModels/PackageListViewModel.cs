@@ -1,4 +1,5 @@
 ﻿using CommunityToolkit.Mvvm.Input;
+using Poc.Synchronisation.Domain.Models;
 using POCSync.MAUI.Models;
 using POCSync.MAUI.Services.Abstractions;
 using POCSync.MAUI.Views;
@@ -24,7 +25,7 @@ public partial class PackageListViewModel(IPackageService service) : BaseViewMod
                 Packages.Add(package);
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Handle exceptions
         }
@@ -45,7 +46,13 @@ public partial class PackageListViewModel(IPackageService service) : BaseViewMod
     {
         var navigationParameter = new Dictionary<string, object>
         {
-            { "PackageJson", JsonSerializer.Serialize(package) }
+            { "PackageJson", JsonSerializer.Serialize(new Package{
+                Id = package.Id,
+                Reference = package.Reference,
+                Weight = package.Weight,
+                Volume = package.Volume,
+                TareWeight = package.TareWeight
+            }) }
         };
 
         await Shell.Current.GoToAsync(nameof(PackageFormPage), navigationParameter);

@@ -4,50 +4,243 @@
              x:Class="POCSync.MAUI.Views.SynchronisationPage"
              xmlns:viewmodel="clr-namespace:POCSync.MAUI.ViewModels"
              x:DataType="viewmodel:SynchronisationViewModel"
+             xmlns:modelLocal="clr-namespace:POCSync.MAUI.Models"
              Title="SynchronisationPage">
-    <VerticalStackLayout Spacing="10" Padding="20">
-        <Label 
-            Text="{Binding ProgressMessage}" 
-            FontSize="16"
-            FontAttributes="Bold"
-            HorizontalOptions="Start"
-            IsVisible="{Binding IsBusy}"/>
+    
+    <ScrollView>
+        <VerticalStackLayout Spacing="10" Padding="20">
+            <VerticalStackLayout IsVisible="{Binding IsThereSomethingToSync}">
+                <Border
+                    Stroke="{AppThemeBinding Light=Gray, Dark=DarkGray}"
+                    StrokeShape="RoundRectangle 8"
+                    Padding="15"
+                    Margin="10"
+                    BackgroundColor="{AppThemeBinding Light=White, Dark=#222}"
+                    IsVisible="{Binding IsNotInitialisation}"
+                >
 
-        <Label 
-            Text="{Binding ProgressTitle}" 
-            HorizontalOptions="Center" />
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="📋 Rapport de synchronisation"
+                           FontSize="18"
+                           FontAttributes="Bold"
+                           TextColor="{AppThemeBinding Light=Black, Dark=White}" />
 
-        <ProgressBar 
-            x:Name="MyProgressBar"
-            Progress="{Binding CurrentProgress}"
-            ProgressColor="Blue"
-            HorizontalOptions="Fill"
-            IsVisible="{Binding IsBusy}"/>
+                        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+                            <Label Text="🕒 Action a synchroniser:"
+                               Grid.Row="0" Grid.Column="0"
+                               FontSize="16" />
+                            <Label Text="{Binding CountDataToSync}"
+                               Grid.Row="0" Grid.Column="1"
+                               FontSize="16"
+                               FontAttributes="Bold" />
 
-        <Button 
-            Text="Start initialisation" 
-            Command="{Binding RetrieveCommand}"
-            IsEnabled="{Binding IsNotBusy}"
-            IsVisible="{Binding IsInitialisation}"
-            HorizontalOptions="Center"
-            Margin="8"/>
+                            <Label Text="🕒 Document a synchrroniser:"
+                               Grid.Row="1" Grid.Column="0"
+                               FontSize="16" />
+                            <Label Text="{Binding CountDocToSync}"
+                               Grid.Row="1" Grid.Column="1"
+                               FontSize="16"
+                               FontAttributes="Bold" />
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
 
-        <Button 
-            Text="Start synchronisation" 
-            Command="{Binding SynchroniseCommand}"
-            IsEnabled="{Binding IsNotBusy}"
-            IsVisible="{Binding IsNotInitialisation}"
-            HorizontalOptions="Center"
-            Margin="8"/>
+                <Label 
+                    Text="{Binding ProgressMessage}" 
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    HorizontalOptions="Start"
+                    IsVisible="{Binding IsBusy}"/>
 
-        <Button 
-            Text="Reset" 
-            Command="{Binding ResetTablesCommand}"
-            HorizontalOptions="Center"
-            Margin="8"/>
+                <Label 
+                    Text="{Binding ProgressTitle}" 
+                    HorizontalOptions="Center" />
 
-        <Label 
-            Text="{Binding StoredEventJson}" 
-            HorizontalOptions="Center" />
-    </VerticalStackLayout>
+                <ProgressBar 
+                    x:Name="MyProgressBar"
+                    Progress="{Binding CurrentProgress}"
+                    ProgressColor="Blue"
+                    HorizontalOptions="Fill"
+                    IsVisible="{Binding IsBusy}"/>
+
+                <Button 
+                    Text="Start initialisation" 
+                    Command="{Binding RetrieveCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    IsVisible="{Binding IsInitialisation}"
+                    HorizontalOptions="Center"
+                    Margin="8"/>
+
+                <Button 
+                    Text="Start synchronisation" 
+                    Command="{Binding SynchroniseCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    IsVisible="{Binding IsNotInitialisation}"
+                    HorizontalOptions="Center"
+                    Margin="8"/>
+
+                <Label 
+                    Text="{Binding StoredEventJson}" 
+                    HorizontalOptions="Center" />
+
+
+            </VerticalStackLayout>
+
+            <!-- Fallback when no documents to sync -->
+            <Label Text="✨ Aucun donnee à synchroniser pour le moment."
+                IsVisible="False"
+                FontSize="16"
+                FontAttributes="Italic"
+                TextColor="Gray"
+                HorizontalOptions="Center"
+            >
+                <Label.Triggers>
+                    <DataTrigger TargetType="Label"
+                         Binding="{Binding IsThereSomethingToSync}"
+                         Value="False"
+            >
+                        <Setter Property="IsVisible" Value="True"/>
+                    </DataTrigger>
+                </Label.Triggers>
+            </Label>
+            <CollectionView
+                ItemsSource="{Binding SynchroSteps}"
+                SelectionMode="None"
+                Margin="10">
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="modelLocal:SynchroStep">
+                        <Border 
+                            StrokeThickness="1" 
+                            StrokeShape="RoundRectangle 8"
+                            Stroke="{AppThemeBinding Light=LightGray, Dark=DimGray}"
+                            Padding="10"
+                            Margin="0,5">
+
+                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+
+                                <!-- Step and Description on the left (col 0, row 0) -->
+                                <StackLayout Grid.Row="0" Grid.Column="0" Spacing="2">
+                                    <Label Text="{Binding Step}" FontAttributes="Bold" FontSize="20" />
+                                    <Label Text="{Binding Description}" FontSize="14" />
+                                </StackLayout>
+
+                                <!-- Check icon on the right (col 1, row 0) -->
+                                <Label 
+                                    Grid.Row="0" Grid.Column="1"
+                                    Text="&#xf058;" 
+                                    FontFamily="FontAwesomeSolid"
+                                    FontSize="30"
+                                    TextColor="Green"
+                                    VerticalOptions="Center"
+                                    IsVisible="{Binding IsCompleted}"
+                                />
+
+                                <!-- Progress bar full width (row 1 spans both columns) -->
+                                <ProgressBar 
+                                    Grid.Row="1" Grid.ColumnSpan="2"
+                                    Progress="{Binding Progress}"
+                                    ProgressColor="Blue"
+                                    Margin="0,10,0,0"
+                                    HorizontalOptions="Fill">
+
+                                    <ProgressBar.Triggers>
+                                        <DataTrigger TargetType="ProgressBar" Binding="{Binding IsCompleted}" Value="True">
+                                            <Setter Property="IsVisible" Value="False" />
+                                        </DataTrigger>
+                                    </ProgressBar.Triggers>
+                                </ProgressBar>
+                            </Grid>
+
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <VerticalStackLayout
+                Padding="20"
+                Spacing="15"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#1E1E1E}"
+                IsVisible="{Binding Report.Isvisible}"
+            >
+
+                <!-- Events Section -->
+                <Border StrokeThickness="1"
+                    Stroke="LightBlue"
+                    Background="#E3F2FD"
+                    StrokeShape="RoundRectangle 12,12,12,12"
+                    Padding="12" 
+                    IsVisible="{Binding IsNotInitialisation}">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="📦 Événements à synchroniser" FontAttributes="Bold" FontSize="16" />
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="À synchroniser :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalEventToSync}" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="Synchronisés :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalEventSynced}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Events to Apply Section -->
+                <Border StrokeThickness="1"
+                    Stroke="LightGreen"
+                    Background="#E8F5E9"
+                    StrokeShape="RoundRectangle 12,12,12,12"
+                    Padding="12"
+                >
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="🛠️ Événements à appliquer" FontAttributes="Bold" FontSize="16" />
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="À appliquer :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalEventToApply}" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="Appliqués :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalEventApplied}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Conflict Section -->
+                <Border StrokeThickness="1" 
+                    Stroke="Orange" 
+                    Background="#FFF3E0" 
+                    StrokeShape="RoundRectangle 12,12,12,12"
+                    Padding="12"
+                >
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="⚠️ Conflits détectés" FontAttributes="Bold" FontSize="16" />
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="Nombre de conflits :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalConflict}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+                <!-- Documents Section -->
+                <Border StrokeThickness="1"
+                    Stroke="HotPink"
+                    Background="#FCE4EC"
+                    StrokeShape="RoundRectangle 12,12,12,12"
+                    Padding="12">
+                    <VerticalStackLayout Spacing="5">
+                        <Label Text="📄 Documents à synchroniser" FontAttributes="Bold" FontSize="16" />
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="À synchroniser :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalDocumentToSync}" />
+                        </HorizontalStackLayout>
+                        <HorizontalStackLayout Spacing="10">
+                            <Label Text="Synchronisés :" FontAttributes="Bold"/>
+                            <Label Text="{Binding Report.TotalDocumentSynced}" />
+                        </HorizontalStackLayout>
+                    </VerticalStackLayout>
+                </Border>
+
+            </VerticalStackLayout>
+
+        </VerticalStackLayout>
+    </ScrollView>
 </ContentPage>

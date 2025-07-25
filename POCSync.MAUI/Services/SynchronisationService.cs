@@ -1,56 +1,18 @@
-﻿using Infrastructure.Dapper.Services.Generated;
-using Mapster;
-using Poc.Synchronisation.Domain;
-using Poc.Synchronisation.Domain.Abstractions;
-using POCSync.MAUI.Extensions;
+﻿using Poc.Synchronisation.Domain.Abstractions.Repositories;
 
 namespace POCSync.MAUI.Services;
 
-public class SynchronisationService(IApi api, IBaseRepository<StoredEvent, Guid> eventRepo)
+public record SynchronisationInfo(
+    int TotalEvents,
+    int TotalDocumentsToSync
+);
+
+public class SynchronisationService(ISynchronisationRepository repository)
 {
-    public async Task<bool> RetrieveAsync()
+    public async Task<SynchronisationInfo> GetSynchronisationInfoAsync(CancellationToken cancellationToken = default)
     {
-        try
-        {
-            // Call the API to synchronise data
-            var data = await api.Retrieve();
-            if (data == null)
-            {
-                return false;
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // Handle exception
-            return false;
-        }
-    }
-
-    public async Task<bool> SynchroniseAsync()
-    {
-        try
-        {
-            var eventStores = await eventRepo.GetAllAsync();
-            if (eventStores == null || !eventStores.Any())
-            {
-                return false;
-            }
-
-            foreach (var batch in eventStores.Batch(10))
-            {
-                var request = new SynchronisationRequest
-                {
-                    Events = batch.Adapt<ICollection<SynchronisedStoredEventDto>>()
-                };
-                var result = await api.Synchronisation(request);
-            }
-            return true;
-        }
-        catch (Exception ex)
-        {
-            // Handle exception
-            return false;
-        }
+        var eventCount = await repository.GetCountOfEventsToSynchronise();
+        var documentCount = await repository.GetCountOfDocumentsToSync();
+        return new(eventCount, documentCount);
     }
 }

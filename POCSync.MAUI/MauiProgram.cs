@@ -30,6 +30,8 @@ namespace POCSync.MAUI
                 {
                     fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                     fonts.AddFont("OpenSans-Semibold.ttf", "OpenssSansSemibold");
+                    fonts.AddFont("FontAwesome-Regular-400.otf", "FontAwesome");
+                    fonts.AddFont("FontAwesome-Solid-900.otf", "FontAwesomeSolid");
                 });
             builder.AddConfiguration();
 #if DEBUG
@@ -40,6 +42,10 @@ namespace POCSync.MAUI
             var dbName = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
             var dbPwd = builder.Configuration["DbPwd"] ?? string.Empty;
             var apiUrl = builder.Configuration["ApiUrl"] ?? string.Empty;
+
+
+            var basePath = builder.Configuration.GetValue<string>("DocumentStorage:BasePath")?.Replace("wwwroot/", "");
+            var defaultSubFolder = builder.Configuration.GetValue<string>("DocumentStorage:DefaultSubFolder");
 
 
             builder.Services
@@ -73,8 +79,26 @@ namespace POCSync.MAUI
 
             builder.Services.AddScoped<IFileSystemPath, FileSystemPath>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
+            builder.Services.AddScoped<IFileTransferService, DocumentService>();
             builder.Services.AddScoped<IPackageImageService, PackageImageService>();
             builder.Services.AddTransient<FileManager>();
+            builder.Services.AddHttpClient("FileDownloadClient", client =>
+            {
+                var baseAddress = $"{apiUrl}/{basePath}/{defaultSubFolder}/";
+                client.BaseAddress = new Uri(baseAddress);
+            })
+#if DEBUG
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+                {
+                    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
+                });
+#else
+                .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler());
+#endif
+
+
+            builder.Services.AddScoped<IDBForeignKeyMode, DBForeignKeyMode>();
+            builder.Services.AddScoped<SynchronisationService>();
 
             var _ = builder.Services.AddInfrastructure(dbPath, dbPwd, apiUrl).GetAwaiter().GetResult();
 

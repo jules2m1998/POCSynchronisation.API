@@ -25,9 +25,10 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory, ILo
                 EventType TEXT NOT NULL,
                 DataType TEXT,
                 DataJson TEXT NOT NULL,
-                ConflictWithJson TEXT NOT NULL
+                ConflictWithJson TEXT NOT NULL,
+                Metadata TEXT
             );
-            
+
             -- Create indexes for better performance
             CREATE INDEX IF NOT EXISTS idx_events_element_id ON StoredEvents(ElementId);
             CREATE INDEX IF NOT EXISTS idx_events_event_type ON StoredEvents(EventType);
@@ -55,11 +56,11 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory, ILo
             const string sql = @"
             INSERT INTO StoredEvents (
                 EventId, MobileEventId, ElementId, EventStatus, EmitedOn, SavedOn, UserId,
-                EventType, DataType, DataJson, ConflictWithJson
+                EventType, DataType, DataJson, ConflictWithJson, Metadata
             )
             VALUES (
                 @EventId, @MobileEventId, @ElementId, @EventStatus, @EmitedOn, @SavedOn, @UserId,
-                @EventType, @DataType, @DataJson, @ConflictWithJson
+                @EventType, @DataType, @DataJson, @ConflictWithJson, @Metadata
             );";
 
             using var connection = _dbConnectionFactory.CreateConnection();
@@ -79,12 +80,13 @@ public class StoredEventRepository(IDbConnectionFactory dbConnectionFactory, ILo
                 entity.EventType,
                 entity.DataType,
                 entity.DataJson,
-                entity.ConflictWithJson
+                entity.ConflictWithJson,
+                Metadata = entity.Metadata ?? string.Empty
             });
 
             return affected > 0;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return false;
         }

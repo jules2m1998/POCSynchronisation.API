@@ -23,13 +23,32 @@ namespace Infrastructure.Dapper.Services.Generated
         /// <term>400</term>
         /// <description>Bad Request</description>
         /// </item>
+        /// </list>
+        /// </exception>
+        [Multipart]
+        [Headers("Accept: text/plain, application/json, text/json")]
+        [Post("/api/Files/upload")]
+        Task<UploadFileResponse> Upload(StreamPart file, IEnumerable<string> paths);
+
+        /// <returns>OK</returns>
+        /// <exception cref="ApiException">
+        /// Thrown when the request returns a non-success status code:
+        /// <list type="table">
+        /// <listheader>
+        /// <term>Status</term>
+        /// <description>Description</description>
+        /// </listheader>
+        /// <item>
+        /// <term>400</term>
+        /// <description>Bad Request</description>
+        /// </item>
         /// <item>
         /// <term>500</term>
         /// <description>Internal Server Error</description>
         /// </item>
         /// </list>
         /// </exception>
-        [Headers("Accept: application/json", "Content-Type: application/json")]
+        [Headers("Accept: application/json")]
         [Post("/api/Synchronisation")]
         Task<SynchronisationResponse> Synchronisation([Body] SynchronisationRequest body);
 
@@ -82,15 +101,7 @@ namespace Infrastructure.Dapper.Services.Generated
 {
     using System = global::System;
 
-
-
-    public enum EventType
-    {
-        Idle,
-        Success,
-        Error,
-        Conflict
-    }
+    
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class LastSavedEventIdDto
@@ -127,7 +138,8 @@ namespace Infrastructure.Dapper.Services.Generated
         public System.Guid ElementId { get; set; }
 
         [JsonPropertyName("eventStatus")]
-        public EventType EventStatus { get; set; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public NonSyncEventsDtoEventStatus EventStatus { get; set; }
 
         [JsonPropertyName("emitedOn")]
         public System.DateTime EmitedOn { get; set; }
@@ -225,8 +237,12 @@ namespace Infrastructure.Dapper.Services.Generated
         [JsonPropertyName("elementId")]
         public System.Guid ElementId { get; set; }
 
+        [JsonPropertyName("userId")]
+        public System.Guid UserId { get; set; }
+
         [JsonPropertyName("eventStatus")]
-        public EventType EventStatus { get; set; }
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public SynchronisedStoredEventDtoEventStatus EventStatus { get; set; }
 
         [JsonPropertyName("emitedOn")]
         public System.DateTime EmitedOn { get; set; }
@@ -237,6 +253,81 @@ namespace Infrastructure.Dapper.Services.Generated
         [JsonPropertyName("lastSyncEvent")]
         public System.Guid LastSyncEvent { get; set; }
 
+        [JsonPropertyName("metadata")]
+        public string Metadata { get; set; }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class UploadFileResponse
+    {
+
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum NonSyncEventsDtoEventStatus
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Idle")]
+        Idle = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Success")]
+        Success = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Error")]
+        Error = 2,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Conflict")]
+        Conflict = 3,
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public enum SynchronisedStoredEventDtoEventStatus
+    {
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Idle")]
+        Idle = 0,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Success")]
+        Success = 1,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Error")]
+        Error = 2,
+
+        [System.Runtime.Serialization.EnumMember(Value = @"Conflict")]
+        Conflict = 3,
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.4.0.0 (NJsonSchema v11.3.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class FileParameter
+    {
+        public FileParameter(System.IO.Stream data)
+            : this (data, null, null)
+        {
+        }
+
+        public FileParameter(System.IO.Stream data, string fileName)
+            : this (data, fileName, null)
+        {
+        }
+
+        public FileParameter(System.IO.Stream data, string fileName, string contentType)
+        {
+            Data = data;
+            FileName = fileName;
+            ContentType = contentType;
+        }
+
+        public System.IO.Stream Data { get; private set; }
+
+        public string FileName { get; private set; }
+
+        public string ContentType { get; private set; }
     }
 
 
