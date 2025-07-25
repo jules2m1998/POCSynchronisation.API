@@ -30,7 +30,7 @@ public class PackageDocumentRepository(IDbConnectionFactory dbConnectionFactory)
         """;
 
     private const string GetByPackageIdSql = """
-        SELECT 
+        SELECT
             pd.PackageId,
             pd.DocumentId,
             p.Id,
@@ -55,6 +55,11 @@ public class PackageDocumentRepository(IDbConnectionFactory dbConnectionFactory)
             FROM PackageDocuments
             WHERE PackageId = @PackageId
         );
+        """;
+
+    private const string DeleteOneByIdsSql = """
+        DELETE FROM PackageDocuments
+        WHERE DocumentId = @DocumentId and PackageId = @PackageId;
         """;
     #endregion
 
@@ -88,8 +93,10 @@ public class PackageDocumentRepository(IDbConnectionFactory dbConnectionFactory)
 
     public override async Task<bool> AddAsync(PackageDocument entity, CancellationToken cancellationToken = default)
     {
-        if (entity?.Document == null)
+        if (entity?.Document == null && entity?.DocumentId == null)
             throw new ArgumentNullException(nameof(entity), "Entity or Document cannot be null");
+
+        var documentId = entity.DocumentId;
 
         using var connection = _dbConnectionFactory.CreateConnection();
 
@@ -99,27 +106,32 @@ public class PackageDocumentRepository(IDbConnectionFactory dbConnectionFactory)
         {
             await connection.ExecuteAsync("PRAGMA foreign_keys = ON;", transaction: transaction);
 
-            var documentParams = new
+            if (entity.Document is not null)
             {
-                entity.Document.Id,
-                entity.Document.FileName,
-                entity.Document.StorageUrl,
-                entity.Document.CreatedAt,
-                entity.Document.ModifiedAt
-            };
+                var documentParams = new
+                {
+                    entity.Document.Id,
+                    entity.Document.FileName,
+                    entity.Document.StorageUrl,
+                    entity.Document.CreatedAt,
+                    entity.Document.ModifiedAt
+                };
 
-            var documentInserted = await connection.ExecuteAsync(
-                InsertDocumentSql,
-                documentParams,
-                transaction: transaction
-            );
+                var documentInserted = await connection.ExecuteAsync(
+                    InsertDocumentSql,
+                    documentParams,
+                    transaction: transaction
+                );
 
-            if (documentInserted == 0)
-                throw new InvalidOperationException("Failed to insert document");
+                if (documentInserted == 0)
+                    throw new InvalidOperationException("Failed to insert document");
+
+                documentId = entity.Document.Id;
+            }
 
             var linkInserted = await connection.ExecuteAsync(
                 InsertLinkSql,
-                new { entity.PackageId, DocumentId = entity.Document.Id },
+                new { entity.PackageId, DocumentId = documentId },
                 transaction: transaction
             );
 
@@ -143,6 +155,16 @@ public class PackageDocumentRepository(IDbConnectionFactory dbConnectionFactory)
             new { PackageId = id }
         );
 
+        return affected > 0;
+    }
+
+    public async Task<bool> DeleteOneByIdAsync(Guid packageId, Guid documentId)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        var affected = await connection.ExecuteAsync(
+            DeleteOneByIdsSql,
+            new { PackageId = packageId, DocumentId = documentId }
+        );
         return affected > 0;
     }
 }

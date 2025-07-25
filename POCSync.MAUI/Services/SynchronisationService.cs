@@ -20,7 +20,7 @@ public class SynchronisationService(IApi api, IBaseRepository<StoredEvent, Guid>
             }
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Handle exception
             return false;
@@ -47,7 +47,7 @@ public class SynchronisationService(IApi api, IBaseRepository<StoredEvent, Guid>
             }
             return true;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Handle exception
             return false;

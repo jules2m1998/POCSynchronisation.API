@@ -42,7 +42,8 @@ public static class DependecyInjection
             {
                 ServerCertificateCustomValidationCallback =
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
-            });
+            }
+        );
         return services;
     }
 }

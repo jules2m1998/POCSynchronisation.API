@@ -23,11 +23,11 @@ public class PackageImageService(IPackagerDocumentRepository repository) : IPack
 
         foreach (var doc in documentsToDelete)
         {
-            await repository.DeleteAsync(doc);
+            await repository.DeleteOneByIdAsync(doc.PackageId, doc.DocumentId);
         }
         foreach (var path in documentsToAdd)
         {
-            var document = new Document { StorageUrl = path, FileName = path.Split(Path.PathSeparator).Last(), ModifiedAt = DateTime.UtcNow };
+            var document = new Document { StorageUrl = path, FileName = Path.GetFileName(path), ModifiedAt = DateTime.UtcNow };
             var packageDocument = new PackageDocument { PackageId = packageId, Document = document };
             await repository.AddAsync(packageDocument);
         }

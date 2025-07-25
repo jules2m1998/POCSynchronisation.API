@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.Input;
 using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.Repository;
+using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.Services.Generated;
 using Mapster;
 using Mediator.Abstractions;
@@ -10,9 +11,9 @@ using Poc.Synchronisation.Application;
 using Poc.Synchronisation.Application.Features.Synchronisation.Commands.Synchronisation;
 using Poc.Synchronisation.Domain;
 using Poc.Synchronisation.Domain.Abstractions;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 using POCSync.MAUI.Extensions;
 using System.Diagnostics;
-using System.Text;
 using System.Text.Json;
 
 namespace POCSync.MAUI.ViewModels;
@@ -25,7 +26,9 @@ public partial class SynchronisationViewModel(
         ISender sender,
         IDbConnectionFactory db,
         ILogger<SynchronisationViewModel> logger,
-        IEnumerable<IEventIdUpdater> IdUpdaters
+        IEnumerable<IEventIdUpdater> IdUpdaters,
+        IFileTransferService fileTransferService,
+        IDBForeignKeyMode keyMod
     ) : BaseViewModel
 {
     [ObservableProperty]
@@ -121,7 +124,10 @@ public partial class SynchronisationViewModel(
             var storedData = data.Adapt<ICollection<StoredRetiever>>();
             logger.LogInformation("Mapped {StoredDataCount} items for initialization", storedData.Count);
 
+            await keyMod.Off();
             var result = await initialiser.Initialise(storedData);
+            await keyMod.On();
+
             logger.LogInformation("Initialization completed with result: {Result}", result);
 
             CurrentProgress = 1;
@@ -152,6 +158,8 @@ public partial class SynchronisationViewModel(
             {
                 logger.LogWarning("User is null, cannot update last saved event");
             }
+
+            await fileTransferService.DownloadFiles();
         }
         catch (Exception ex)
         {
@@ -176,13 +184,16 @@ public partial class SynchronisationViewModel(
         try
         {
             await SendEventsAsync();
-            var allEvents = await storeEventRepo.GetAllAsync();
-
             ProgressTitle = "Fetching events";
-            logger.LogInformation("Fetching non-synced events from server. LastEventSynced: {LastEventId}",
-                user?.LastEventSynced ?? Guid.Empty);
+            logger.LogInformation("Fetching non-synced events from server. LastEventSynced: {LastEventId}", user?.LastEventSynced ?? Guid.Empty);
 
-            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty, user.Id);
+            if (user is null)
+            {
+                logger.LogWarning("User is null, cannot fetch non-synced events");
+                return;
+            }
+
+            var result = await api.NonSyncedEvents(user?.LastEventSynced ?? Guid.Empty, user!.Id);
             logger.LogInformation("Retrieved {EventCount} non-synced events from server", result?.Count ?? 0);
 
             var eventsToSync = result.Adapt<ICollection<StoredEvent>>();
@@ -190,6 +201,10 @@ public partial class SynchronisationViewModel(
 
             await ApplyEventAsync(eventsToSync);
             logger.LogInformation("Synchronization process completed successfully");
+
+
+            await fileTransferService.UploadFiles();
+            await fileTransferService.DownloadFiles();
         }
         catch (Exception ex)
         {
@@ -351,7 +366,8 @@ public partial class SynchronisationViewModel(
                 };
 
                 logger.LogDebug("Sending synchronization request with {request}", JsonSerializer.Serialize(request));
-                var data = await SynchronizeWithServerAsync(request);
+                // var data = await SynchronizeWithServerAsync(request);
+                var data = await api.Synchronisation(request);
                 logger.LogDebug("Server responded with {data}", JsonSerializer.Serialize(data));
 
                 var createEvents = data?
@@ -370,7 +386,7 @@ public partial class SynchronisationViewModel(
 
                 foreach (var result in data.Results)
                 {
-                    if (result.EventStatus == EventType.Success || result.EventStatus == EventType.Conflict)
+                    if (result.EventStatus == SynchronisedStoredEventDtoEventStatus.Success || result.EventStatus == SynchronisedStoredEventDtoEventStatus.Conflict)
                     {
                         var id = result.EventId;
                         var deleteResult = await storeEventRepo.DeleteByIdAsync(id);
@@ -420,88 +436,6 @@ public partial class SynchronisationViewModel(
 
             stopwatch.Stop();
             logger.LogInformation("SendEventsAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
-        }
-    }
-
-    private async Task<SynchronisationResponse> SynchronizeWithServerAsync(SynchronisationRequest request)
-    {
-        logger.LogInformation("Starting server synchronization with {EventCount} events", request.Events?.Count ?? 0);
-        var stopwatch = Stopwatch.StartNew();
-
-        try
-        {
-            // Create a handler that accepts all certificates (WARNING: ONLY FOR DEVELOPMENT)
-            var handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-            };
-
-            // For Android specifically, use AndroidMessageHandler
-            if (DeviceInfo.Platform == DevicePlatform.Android)
-            {
-                logger.LogDebug("Using Android-specific HTTP handler");
-                handler = new()
-                {
-                    ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-                };
-            }
-
-            using var httpClient = new HttpClient(handler);
-            var baseUrl = "https://localhost:7199/";
-            httpClient.BaseAddress = new Uri(baseUrl);
-            logger.LogDebug("HTTP client configured with base URL: {BaseUrl}", baseUrl);
-
-            // Configure headers
-            httpClient.DefaultRequestHeaders.Accept.Add(
-                new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-
-            // Serialize the request
-            var jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = false
-            };
-
-            var jsonContent = JsonSerializer.Serialize(request, jsonOptions);
-            logger.LogDebug("Serialized request size: {RequestSize} characters", jsonContent.Length);
-
-            var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
-
-            logger.LogInformation("Sending POST request to api/Synchronisation");
-            var response = await httpClient.PostAsync("api/Synchronisation", content);
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                logger.LogInformation("Received successful response with {ResponseSize} characters", responseContent.Length);
-
-                var result = JsonSerializer.Deserialize<SynchronisationResponse>(responseContent, jsonOptions);
-                logger.LogInformation("Deserialized response with {ResultCount} results", result?.Results?.Count ?? 0);
-
-                return result;
-            }
-            else
-            {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                logger.LogError("Synchronization failed with status {StatusCode}: {ErrorContent}",
-                    response.StatusCode, errorContent);
-
-                throw new HttpRequestException(
-                    $"Synchronization failed with status code {response.StatusCode}: {errorContent}",
-                    null,
-                    response.StatusCode);
-            }
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Error during server synchronization");
-            await Shell.Current.DisplayAlert("Error", $"An error occurred while synchronizing with server: {ex.Message}", "OK");
-            throw;
-        }
-        finally
-        {
-            stopwatch.Stop();
-            logger.LogInformation("SynchronizeWithServerAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
         }
     }
 }
