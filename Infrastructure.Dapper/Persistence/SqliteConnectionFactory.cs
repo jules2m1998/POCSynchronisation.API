@@ -11,6 +11,9 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
     private readonly string pass = string.Empty;
     private bool _initialized = false;
     private readonly object _lock = new();
+    private readonly string _dbPath;
+
+    public string ConnectionString => _dbPath;
 
     public SqliteConnectionFactory(string dbPath, string password)
     {
@@ -30,6 +33,7 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
             Mode = SqliteOpenMode.ReadWriteCreate
         }.ToString();
         pass = password;
+        _dbPath = dbPath;
     }
 
     public IDbConnection CreateConnection()

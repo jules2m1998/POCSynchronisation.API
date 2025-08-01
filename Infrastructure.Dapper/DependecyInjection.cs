@@ -1,6 +1,8 @@
-﻿using Infrastructure.Dapper.Services.EventIdUpdaters;
+﻿using Infrastructure.Dapper.Services;
+using Infrastructure.Dapper.Services.EventIdUpdaters;
 using Infrastructure.Dapper.Services.Generated;
 using Poc.Synchronisation.Domain.Abstractions.Repositories;
+using Poc.Synchronisation.Domain.Abstractions.Services;
 
 namespace Infrastructure.Dapper;
 
@@ -45,6 +47,9 @@ public static class DependecyInjection
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             }
         );
+
+        services.AddTransient<IAppGuards, AppGuards>();
+
         return services;
     }
 }

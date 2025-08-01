@@ -3,7 +3,6 @@ using Dapper;
 using Infrastructure.Dapper;
 using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.Services;
-using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.TypeHandlers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -28,10 +27,10 @@ namespace POCSync.MAUI
                 .UseMauiCommunityToolkit()
                 .ConfigureFonts(fonts =>
                 {
-                    fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
-                    fonts.AddFont("OpenSans-Semibold.ttf", "OpenssSansSemibold");
-                    fonts.AddFont("FontAwesome-Regular-400.otf", "FontAwesome");
-                    fonts.AddFont("FontAwesome-Solid-900.otf", "FontAwesomeSolid");
+                    fonts.AddFont("OpenSans-Regular.ttf", alias: "OpenSansRegular");
+                    fonts.AddFont("OpenSans-Semibold.ttf", alias: "OpenSansSemibold");
+                    fonts.AddFont("FontAwesome-Regular-400.otf", alias: "FontAwesome");
+                    fonts.AddFont("FontAwesome-Solid-900.otf", alias: "FontAwesomeSolid");
                 });
             builder.AddConfiguration();
 #if DEBUG
@@ -54,13 +53,9 @@ namespace POCSync.MAUI
             string dbPath;
             dbPath = Path.Combine(FileSystem.AppDataDirectory, dbName); // fallback
 #if ANDROID
-            string downloadsDir = Android.OS.Environment.GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDocuments)?.AbsolutePath ?? FileSystem.AppDataDirectory;
+            string downloadsDir = PermisionManager.GetStoragePath();
             dbPath = Path.Combine(downloadsDir, dbName);
-#else
-            dbPath = Path.Combine(FileSystem.AppDataDirectory, dbName); // fallback
 #endif
-
-
             SqlMapper.AddTypeHandler(new SqliteGuidTypeHandler());
 
 
@@ -75,6 +70,7 @@ namespace POCSync.MAUI
             builder.Services.AddScoped<IPackageService, PackageService>();
             builder.Services.AddScoped<IPermissionManger, PermisionManager>();
             builder.Services.AddTransient<IPlatformIdentifier, PlatformIdentifier>();
+            builder.Services.AddTransient<IAppGuards, AppGuards>();
 
 
             builder.Services.AddScoped<IFileSystemPath, FileSystemPath>();

@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.Input;
 using Infrastructure.Dapper;
 using Infrastructure.Dapper.Abstractions;
 using Infrastructure.Dapper.Repository;
-using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.Services.Generated;
 using Mapster;
 using Mediator.Abstractions;
@@ -35,7 +34,8 @@ public partial class SynchronisationViewModel(
         IFileTransferService fileTransferService,
         IDBForeignKeyMode keyMod,
         DatabaseInitializer _databaseInitializer,
-        SynchronisationService synchronisationService
+        SynchronisationService synchronisationService,
+        IAppGuards appGuards
     ) : BaseViewModel
 {
     [ObservableProperty]
@@ -69,6 +69,9 @@ public partial class SynchronisationViewModel(
     [ObservableProperty]
     bool isThereSomethingToSync = true;
 
+    [ObservableProperty]
+    bool isInitialised = false;
+
     public bool IsNotInitialisation => !IsInitialisation;
 
     private User? user { get; set; }
@@ -76,6 +79,10 @@ public partial class SynchronisationViewModel(
     [RelayCommand]
     async Task Initialisation()
     {
+        if (!appGuards.DoesDbInitialized())
+        {
+            return;
+        }
         logger.LogInformation("Starting initialization process");
         var stopwatch = Stopwatch.StartNew();
         var info = await synchronisationService.GetSynchronisationInfoAsync();
@@ -132,19 +139,42 @@ public partial class SynchronisationViewModel(
             stopwatch.Stop();
             logger.LogInformation("Initialization completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
         }
+
+        IsInitialised = true;
     }
 
     [RelayCommand]
     async Task Retrieve()
     {
-        db.CleanDb();
-        await _databaseInitializer.InitializeDatabaseAsync();
-        await Initialisation();
+        IsBusy = true;
 
         SynchroSteps.Clear();
-        IsBusy = true;
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation("Starting data retrieval process");
+
+        // 🛠️ Step 0 - Initialize database
+        var initStep = CreateStep("Initialisation de la base locale", "Nettoyage et préparation de la base", 0.1);
+        SynchroSteps.Add(initStep);
+        try
+        {
+            db.CleanDb();
+            UpdateStep(initStep, "Base nettoyée", 0.4);
+
+            await _databaseInitializer.InitializeDatabaseAsync();
+            UpdateStep(initStep, "Base initialisée", 0.7);
+
+            await Initialisation();
+            UpdateStep(initStep, "Initialisation terminée ✅", 1.0, isSuccess: true);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Erreur lors de l'initialisation");
+            UpdateStep(initStep, "Erreur lors de l'initialisation", 1.0, ex.Message, false, true);
+            await Shell.Current.DisplayAlert("Erreur", $"Une erreur s'est produite : {ex.Message}", "OK");
+            IsBusy = false;
+            CatchException(ex);
+            return;
+        }
 
         try
         {
@@ -154,9 +184,22 @@ public partial class SynchronisationViewModel(
 
             ProgressTitle = "Retrieving data...";
             CurrentProgress = 0.2;
+            ICollection<StoredRetieverDto>? data = null;
+            var itemCount = 0;
 
-            var data = await api.Retrieve();
-            var itemCount = data?.Count ?? 0;
+            try
+            {
+                data = await api.Retrieve();
+                itemCount = data?.Count ?? 0;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error retrieving data from API");
+                UpdateStep(step1, "Erreur lors de la récupération des données", 1.0, ex.Message, false, true);
+                await Shell.Current.DisplayAlert("Erreur", $"Une erreur s'est produite : {ex.Message}", "OK");
+                CatchException(ex);
+                return;
+            }
 
             UpdateStep(step1, $"{itemCount} élément(s) récupéré(s) avec succès !", 0.5);
 
@@ -177,7 +220,7 @@ public partial class SynchronisationViewModel(
 
             logger.LogInformation("Data initialization result: {Result}", result);
 
-            UpdateStep(step1, "Données sauvegardées avec succès", 1.0, isCompleted: true);
+            UpdateStep(step1, "Données sauvegardées avec succès", 1.0, isSuccess: true);
 
             CurrentProgress = 0.8;
             ProgressTitle = "Saving complete";
@@ -213,12 +256,24 @@ public partial class SynchronisationViewModel(
         {
             logger.LogError(ex, "Error during data retrieval process");
             await Shell.Current.DisplayAlert("Erreur", $"Une erreur s'est produite : {ex.Message}", "OK");
+            CatchException(ex);
         }
         finally
         {
             IsBusy = false;
             stopwatch.Stop();
             logger.LogInformation("Data retrieval finished in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+        }
+
+    }
+
+    private void CatchException(Exception ex)
+    {
+        var lastStep = SynchroSteps.LastOrDefault();
+        if (lastStep is not null)
+        {
+            lastStep.Progress = 1.0;
+            lastStep.Errors.Add(ex.Message);
         }
     }
 
@@ -228,13 +283,30 @@ public partial class SynchronisationViewModel(
         var step2 = CreateStep("Téléchargement des fichiers du serveur", "Initialisation du téléchargement...", 0.1);
         SynchroSteps.Add(step2);
 
-        await foreach (var (description, progress) in fileTransferService.DownloadFiles())
+        await foreach (var syncInfo in fileTransferService.DownloadFiles())
         {
-            UpdateStep(step2, description, progress);
-            logger.LogInformation("File download progress: {Description} - {Progress:P0}", description, progress);
+            if (syncInfo.Total.HasValue)
+            {
+                Report.TotalDocumentToSync += syncInfo.Total.Value;
+            }
+
+            if (syncInfo.IsError)
+            {
+                UpdateStep(step2, syncInfo.Description, syncInfo.Progress, syncInfo.ErrorDescription);
+            }
+            else
+            {
+                UpdateStep(step2, syncInfo.Description, syncInfo.Progress);
+            }
+            logger.LogInformation("File download progress: {Description} - {Progress:P0}", syncInfo.Description, syncInfo.Progress);
+
+            if (syncInfo.SyncedFileCount > 0)
+            {
+                Report.TotalDocumentSynced += syncInfo.SyncedFileCount;
+            }
         }
 
-        UpdateStep(step2, "📁 Fichiers téléchargés avec succès !", 1.0, isCompleted: true);
+        UpdateStep(step2, "📁 Fichiers téléchargés avec succès !", 1.0, isSuccess: true);
     }
 
     [RelayCommand]
@@ -275,6 +347,7 @@ public partial class SynchronisationViewModel(
         {
             logger.LogError(ex, "Error during synchronization process");
             await Shell.Current.DisplayAlert("Error", $"An error occurred while synchronizing: {ex.Message}", "OK");
+            CatchException(ex);
         }
         finally
         {
@@ -289,6 +362,7 @@ public partial class SynchronisationViewModel(
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error updating StoredEventJson");
+                CatchException(ex);
             }
 
             stopwatch.Stop();
@@ -304,27 +378,30 @@ public partial class SynchronisationViewModel(
             Step = "",
             Description = "",
             Progress = 0.0,
-            IsCompleted = false
+            IsSuccess = false
         };
-        await foreach (var (description, progress, isNewStep, stepTitle, total) in fileTransferService.UploadFiles())
+        await foreach (var line in fileTransferService.UploadFiles())
         {
-            if (total.HasValue)
+            if (line.Total.HasValue)
             {
-                Report.TotalDocumentToSync = total.Value;
+                Report.TotalDocumentToSync += line.Total.Value;
             }
-            Report.TotalDocumentSynced += 1;
-
-            if (isNewStep && stepTitle != null)
+            if (line.SyncedFileCount > 0)
             {
-                currentStep.IsCompleted = true;
-                currentStep = CreateStep(stepTitle, description, progress);
+                Report.TotalDocumentSynced += line.SyncedFileCount;
+            }
+
+            if (line.IsNewStep && line.StepTitle != null)
+            {
+                currentStep.IsSuccess = true;
+                currentStep = CreateStep(line.StepTitle, line.Description, line.Progress);
                 SynchroSteps.Add(currentStep);
                 continue;
             }
-            currentStep.Description = description;
-            currentStep.Progress = progress;
+            currentStep.Description = line.Description;
+            currentStep.Progress = line.Progress;
         }
-        currentStep.IsCompleted = true;
+        currentStep.IsSuccess = true;
     }
 
     [RelayCommand]
@@ -357,42 +434,13 @@ public partial class SynchronisationViewModel(
     }
 
     [RelayCommand]
-    async Task OnRunProgress()
+    async Task OnReloadPage()
     {
-        SynchroSteps.Clear();
-        var step1 = new SynchroStep
+
+        if (Application.Current?.Windows.Count > 0)
         {
-            Step = "Test",
-            Description = "Test",
-            IsCompleted = false,
-            Progress = 0.1
-        };
-
-        SynchroSteps.Add(step1);
-
-
-        await Task.Delay(2000);
-        step1.Step = "Test 2";
-        step1.Description = "Hello";
-        step1.Progress = 0.5;
-
-        await Task.Delay(2000);
-        step1.Step = "Test 3";
-        step1.Description = "Hello world";
-        step1.Progress = 0.8;
-
-
-        var step2 = new SynchroStep
-        {
-            Step = "Test 3333",
-            Description = "Test",
-            IsCompleted = false,
-            Progress = 0.9
-        };
-
-
-        SynchroSteps.Add(step2);
-
+            Application.Current.Windows[0].Page = new AppShell();
+        }
     }
 
     private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
@@ -485,7 +533,7 @@ public partial class SynchronisationViewModel(
             Report.TotalEventToSync = events.Length;
             Report.TotalEventSynced = 0;
 
-            UpdateStep(getEventsStep, $"📁 {events.Length} action(s) récupérée(s) avec succès", 1.0, true);
+            UpdateStep(getEventsStep, $"📁 {events.Length} action(s) récupérée(s) avec succès", 1.0, isSuccess: true);
 
             if (events.Length == 0)
             {
@@ -542,7 +590,7 @@ public partial class SynchronisationViewModel(
                 Report.TotalConflict += response.Results?.Count(x => x.EventStatus == SynchronisedStoredEventDtoEventStatus.Conflict) ?? 0;
             }
 
-            UpdateStep(sendStep, "📁 Données envoyées avec succès ✅", 1.0, true);
+            UpdateStep(sendStep, "📁 Données envoyées avec succès ✅", 1.0, isSuccess: true);
             logger.LogInformation("📤 Sent {ProcessedBatches} batches, deleted {DeletedEvents} events", processedBatches, deletedEvents);
         }
         catch (Exception ex)
@@ -570,7 +618,7 @@ public partial class SynchronisationViewModel(
                 logger.LogDebug("Updater {Type} finished: {Result}", updater.GetType().Name, result);
             }
 
-            UpdateStep(reconciliationStep, "🤝 Réconciliation terminée ✅", 1.0, true);
+            UpdateStep(reconciliationStep, "🤝 Réconciliation terminée ✅", 1.0, isSuccess: true);
             logger.LogInformation("✅ Event ID update completed");
         }
         catch (Exception ex)
@@ -585,19 +633,31 @@ public partial class SynchronisationViewModel(
         }
     }
 
-    private SynchroStep CreateStep(string step, string description, double progress) =>
-    new()
-    {
-        Step = step,
-        Description = description,
-        Progress = progress,
-        IsCompleted = false
-    };
+    private static SynchroStep CreateStep(string step, string description, double progress) =>
+        new()
+        {
+            Step = step,
+            Description = description,
+            Progress = progress,
+            IsSuccess = false
+        };
 
-    private void UpdateStep(SynchroStep step, string description, double progress, bool isCompleted = false)
+    private static void UpdateStep(
+        SynchroStep step,
+        string description,
+        double progress,
+        string? error = null,
+        bool isSuccess = false,
+        bool isError = false
+    )
     {
         step.Description = description;
         step.Progress = progress;
-        step.IsCompleted = isCompleted;
+        step.IsSuccess = isSuccess;
+        step.IsError = isError;
+        if (error is not null)
+        {
+            step.Errors.Add(error);
+        }
     }
 }

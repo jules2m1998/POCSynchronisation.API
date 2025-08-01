@@ -103,11 +103,19 @@
                     </DataTrigger>
                 </Label.Triggers>
             </Label>
+            <Button 
+                Text="Ok"
+                IsVisible="{Binding IsInitialised}"
+                HorizontalOptions="Center"
+                Margin="8"
+                Command="{Binding ReloadPageCommand}"
+            />
+            
             <CollectionView
                 ItemsSource="{Binding SynchroSteps}"
                 SelectionMode="None"
-                Margin="10">
-
+                Margin="10"
+            >
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="modelLocal:SynchroStep">
                         <Border 
@@ -115,9 +123,15 @@
                             StrokeShape="RoundRectangle 8"
                             Stroke="{AppThemeBinding Light=LightGray, Dark=DimGray}"
                             Padding="10"
-                            Margin="0,5">
+                            Margin="0,5"
+                        >
+                            <Border.Triggers>
+                                <DataTrigger TargetType="Border" Binding="{Binding IsError}" Value="True">
+                                    <Setter Property="Stroke" Value="Red" />
+                                </DataTrigger>
+                            </Border.Triggers>
 
-                            <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="10">
 
                                 <!-- Step and Description on the left (col 0, row 0) -->
                                 <StackLayout Grid.Row="0" Grid.Column="0" Spacing="2">
@@ -133,8 +147,57 @@
                                     FontSize="30"
                                     TextColor="Green"
                                     VerticalOptions="Center"
-                                    IsVisible="{Binding IsCompleted}"
+                                    IsVisible="{Binding IsSuccess}"
                                 />
+                                <Label 
+                                    Grid.Row="0" Grid.Column="1"
+                                    Text="&#xf057;" 
+                                    FontFamily="FontAwesomeSolid"
+                                    FontSize="30"
+                                    TextColor="Red"
+                                    VerticalOptions="Center"
+                                    IsVisible="{Binding IsError}"
+                                />
+
+
+                                <!-- Error section if any -->
+                                <VerticalStackLayout 
+                                    Grid.Row="2" Grid.ColumnSpan="2" 
+                                    Margin="0,10,0,0"
+                                    BackgroundColor="#ffe6e6"
+                                    Padding="8"
+                                    Spacing="5"
+                                    IsVisible="{Binding HasErrors}"
+                                >
+
+                                    <Label 
+                                        Text="⚠️ Erreurs :"
+                                        TextColor="DarkRed"
+                                        FontAttributes="Bold"
+                                        FontSize="14" 
+                                    />
+
+                                    <CollectionView 
+                                        ItemsSource="{Binding Errors}" 
+                                        SelectionMode="None"
+                                        Margin="0"
+                                    >
+                                        <CollectionView.ItemsLayout>
+                                            <LinearItemsLayout Orientation="Vertical"/>
+                                        </CollectionView.ItemsLayout>
+                                        <CollectionView.ItemTemplate>
+                                            <DataTemplate x:DataType="{x:Type x:String}">
+                                                <Label 
+                                                    Text="{Binding}"
+                                                    FontSize="13"
+                                                    TextColor="DarkRed"
+                                                    Margin="10,2,0,0"
+                                                />
+                                            </DataTemplate>
+                                        </CollectionView.ItemTemplate>
+                                    </CollectionView>
+                                </VerticalStackLayout>
+
 
                                 <!-- Progress bar full width (row 1 spans both columns) -->
                                 <ProgressBar 

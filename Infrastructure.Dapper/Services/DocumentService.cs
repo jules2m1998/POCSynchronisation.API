@@ -1,8 +1,10 @@
 ﻿using Dapper;
-using Infrastructure.Dapper.Services.Abstractions;
 using Infrastructure.Dapper.Services.Generated;
 using Microsoft.Extensions.Logging;
 using Poc.Synchronisation.Domain.Abstractions.Services;
+using Poc.Synchronisation.Domain.Types;
+using System.Data;
+using System.Net;
 
 namespace Infrastructure.Dapper.Services;
 
@@ -149,10 +151,11 @@ public class DocumentService(
 
     public string GetBaseUrl() => _basePath;
 
-    public async IAsyncEnumerable<(string description, double progress, bool isNewStep, string? stepTitle, int? total)> UploadFiles()
+    //public async IAsyncEnumerable<(string description, double progress, bool isNewStep, string? stepTitle, int? total)> UploadFiles()
+    public async IAsyncEnumerable<UploadFilesStepModel> UploadFiles()
     {
         // STEP 1: FETCH FILES
-        yield return ("Initialisation de la récupération des fichiers à uploader...", 0.0, true, "Récupération des fichiers", null);
+        yield return UploadFilesStepModel.CreateSuccess("Initialisation de la récupération des fichiers à uploader...", 0.0, true, "Récupération des fichiers", null);
 
         var connection = dbConnectionFactory.CreateConnection();
         var nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetAllNonSyncFilePaths)).ToArray();
@@ -161,15 +164,15 @@ public class DocumentService(
 
         if (totalFiles == 0)
         {
-            yield return ("Aucun fichier à uploader. Étape terminée ✅", 1.0, false, null, null);
+            yield return UploadFilesStepModel.CreateSuccess("Aucun fichier à uploader. Étape terminée ✅", 1.0, false, null, 0);
             yield break;
         }
 
-        yield return ($"📁 {totalFiles} fichier(s) à uploader récupéré(s).", 1.0, false, null, totalFiles);
+        yield return UploadFilesStepModel.CreateSuccess($"📁 {totalFiles} fichier(s) à uploader récupéré(s).", 1.0, false, null, totalFiles);
 
 
         // STEP 2: UPLOAD FILES
-        yield return ("Début de l'upload des fichiers vers le serveur...", 0.0, true, "Upload des fichiers", null);
+        yield return UploadFilesStepModel.CreateSuccess("Début de l'upload des fichiers vers le serveur...", 0.0, true, "Upload des fichiers", null);
 
         var failure = new List<string>();
         var success = new List<string>();
@@ -182,7 +185,7 @@ public class DocumentService(
             {
                 _logger.LogWarning("Fichier introuvable ou chemin invalide : {Path}", path);
                 failure.Add(url);
-                yield return ($"❌ Fichier introuvable : {url}", (double)index / totalFiles, false, null, null);
+                yield return UploadFilesStepModel.CreateError("", $"❌ Fichier introuvable : {url}", (double)index / totalFiles);
                 index++;
                 continue;
             }
@@ -198,7 +201,7 @@ public class DocumentService(
             if (!result.Success)
             {
                 failure.Add(url);
-                yield return ($"❌ Échec de l'upload : {fileName}", (double)index / totalFiles, false, null, null);
+                yield return UploadFilesStepModel.CreateError("", $"❌ Échec de l'upload : {fileName}", (double)index / totalFiles);
                 index++;
                 continue;
             }
@@ -212,18 +215,18 @@ public class DocumentService(
             {
                 _logger.LogWarning("Échec de la mise à jour du statut de synchronisation pour : {Path}", path);
                 failure.Add(url);
-                yield return ($"❌ Upload réussi mais mise à jour échouée : {fileName}", (double)index / totalFiles, false, null, null);
+                yield return UploadFilesStepModel.CreateError("", $"❌ Upload réussi mais mise à jour échouée : {fileName}", (double)index / totalFiles);
             }
             else
             {
                 success.Add(url);
-                yield return ($"✅ {fileName} uploadé avec succès", (double)index / totalFiles, false, null, null);
+                yield return UploadFilesStepModel.CreateSuccess($"✅ {fileName} uploadé avec succès", (double)index / totalFiles, false, null, null, 1);
             }
 
             index++;
         }
 
-        yield return ($"📦 Upload terminé. {success.Count} succès, {failure.Count} échecs.", 1.0, false, null, null);
+        yield return UploadFilesStepModel.CreateSuccess($"📦 Upload terminé. {success.Count} succès, {failure.Count} échecs.", 1.0, false, null, null);
     }
 
 
@@ -242,56 +245,127 @@ public class DocumentService(
         }
     }
 
-    public async IAsyncEnumerable<(string, double)> DownloadFiles()
+    public async IAsyncEnumerable<DownloadFilesStep> DownloadFiles()
     {
         var permissionGranted = await permissionManger.CheckAndRequestStoragePermission();
         if (!permissionGranted)
         {
-            yield return ("Action non autorisée !", 1.0);
+            yield return DownloadFilesStep.CreateError(
+                "Action non autorisée 🚫",
+                "Vous n'avez pas les droits nécessaires pour cette action.",
+                1.0);
             yield break;
         }
 
-        var connection = dbConnectionFactory.CreateConnection();
-        var nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetNonUserFilePaths)).ToArray();
+        string[] nonSyncedFiles = [];
+        IDbConnection connection;
+        Exception? queryException = null;
 
-        yield return ($"{nonSyncedFiles.Length} fichier(s) à synchroniser", 0.1);
+        try
+        {
+            connection = dbConnectionFactory.CreateConnection();
+            nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetNonUserFilePaths)).ToArray();
+        }
+        catch (Exception ex)
+        {
+            queryException = ex;
+            connection = null!;
+        }
+
+        if (queryException is not null)
+        {
+            var msg = $"{queryException.GetType().Name} (0x{queryException.HResult:X}): {queryException.Message}";
+            _logger.LogError(queryException, "Erreur lors de la récupération des fichiers non synchronisés");
+            yield return DownloadFilesStep.CreateError("Erreur de récupération", msg, 1.0);
+            yield break;
+        }
 
         if (nonSyncedFiles.Length == 0)
         {
-            yield return ("Aucun fichier à télécharger", 1.0);
+            yield return DownloadFilesStep.CreateSuccess("Aucun fichier à télécharger 📂", 1.0);
             yield break;
         }
 
-        var result = new List<string>();
-        double step = 0.9 / nonSyncedFiles.Length;
+        yield return DownloadFilesStep.CreateSuccess($"{nonSyncedFiles.Length} fichier(s) à synchroniser 📁", 0.1, total: nonSyncedFiles.Length);
+
         double progress = 0.1;
+        double step = 0.9 / nonSyncedFiles.Length;
 
         foreach (var path in nonSyncedFiles)
         {
-            using var response = await fileClient.GetAsync(path);
-            response.EnsureSuccessStatusCode();
+            string fileName = Path.GetFileName(path);
+            string fullPath = Path.Combine(_basePath, path);
+            string? directory = Path.GetDirectoryName(fullPath);
 
-            var fullPath = Path.Combine(_basePath, path);
-            var directory = Path.GetDirectoryName(fullPath);
-            if (directory is not null && !Directory.Exists(directory))
-                Directory.CreateDirectory(directory);
+            bool hadError = false;
+            string? errorTitle = null;
+            string? errorDetail = null;
 
-            using var stream = File.OpenWrite(fullPath);
-            await response.Content.CopyToAsync(stream);
+            try
+            {
+                using var response = await fileClient.GetAsync(path);
 
-            result.Add(fullPath);
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    hadError = true;
+                    errorDetail = $"Fichier introuvable sur le serveur: {fileName}";
+                    errorTitle = "Le fichier n'existe pas sur le serveur (404).";
+                    _logger.LogWarning("Fichier 404: {Path}", path);
+                }
+                else
+                {
+                    response.EnsureSuccessStatusCode();
 
-            await connection.ExecuteAsync(
-                sqlUpdateDocumentSyncStatus,
-                new { StorageUrl = path }
-            );
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                        Directory.CreateDirectory(directory);
+
+                    using var stream = File.OpenWrite(fullPath);
+                    await response.Content.CopyToAsync(stream);
+
+                    var updated = await connection.ExecuteAsync(
+                        sqlUpdateDocumentSyncStatus,
+                        new { StorageUrl = path }
+                    );
+
+                    if (updated == 0)
+                    {
+                        hadError = true;
+                        errorTitle = $"Sync échouée: {fileName}";
+                        errorDetail = "La base de données n'a pas été mise à jour.";
+                        _logger.LogWarning("Aucune ligne mise à jour pour {Path}", path);
+                    }
+                }
+            }
+            catch (HttpRequestException ex)
+            {
+                hadError = true;
+                errorTitle = $"Erreur HTTP: {fileName}";
+                errorDetail = $"{ex.GetType().Name} (0x{ex.HResult:X}): {ex.Message}";
+                _logger.LogError(ex, "Erreur HTTP pour {Path}", path);
+            }
+            catch (Exception ex)
+            {
+                hadError = true;
+                errorTitle = $"Erreur: {fileName}";
+                errorDetail = $"{ex.GetType().Name} (0x{ex.HResult:X}): {ex.Message}";
+                _logger.LogError(ex, "Erreur pour {Path}", path);
+            }
 
             progress += step;
-            yield return ($"Téléchargé: {Path.GetFileName(path)}", Math.Min(progress, 0.99));
+
+            if (hadError)
+            {
+                yield return DownloadFilesStep.CreateError(errorTitle!, errorDetail!, Math.Min(progress, 0.99));
+            }
+            else
+            {
+                yield return DownloadFilesStep.CreateSuccess($"✅ Téléchargé: {fileName}", Math.Min(progress, 0.99), syncedCount: 1);
+            }
         }
 
-        yield return ("Téléchargement terminé", 1.0);
+        yield return DownloadFilesStep.CreateSuccess("📥 Téléchargement terminé", 1.0);
     }
+
 
     #endregion
 }

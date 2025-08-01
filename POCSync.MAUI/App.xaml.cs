@@ -1,28 +1,29 @@
-﻿using Infrastructure.Dapper;
-using System.Threading.Tasks;
+﻿using Poc.Synchronisation.Domain.Abstractions.Services;
+using POCSync.MAUI.ViewModels;
+using POCSync.MAUI.Views;
 
 namespace POCSync.MAUI
 {
     public partial class App : Application
     {
-        private readonly DatabaseInitializer _databaseInitializer;
+        private readonly IAppGuards _guards;
+        private readonly SynchronisationViewModel _synchronisationViewModel;
 
-        public App(DatabaseInitializer databaseInitializer)
+        public App(IAppGuards guards, SynchronisationViewModel vm)
         {
-            _databaseInitializer = databaseInitializer;
+            _guards = guards;
+            _synchronisationViewModel = vm;
             InitializeComponent();
         }
 
         protected override Window CreateWindow(IActivationState? activationState)
         {
-            return new Window(new AppShell());
-        }
+            if (_guards.DoesDbInitialized())
+            {
+                return new Window(new AppShell());
+            }
 
-        protected override async void OnStart()
-        {
-            base.OnStart();
-
-            await _databaseInitializer.InitializeDatabaseAsync();
+            return new Window(new SynchronisationPage(_synchronisationViewModel));
         }
     }
 }

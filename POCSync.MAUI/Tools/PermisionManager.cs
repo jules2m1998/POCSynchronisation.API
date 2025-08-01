@@ -21,4 +21,16 @@ public class PermisionManager : IPermissionManger
 
         return status == PermissionStatus.Granted && writeStatus == PermissionStatus.Granted;
     }
+
+    public static string GetStoragePath()
+    {
+#if ANDROID
+        return Android.OS
+            .Environment
+            .GetExternalStoragePublicDirectory(Android.OS.Environment.DirectoryDocuments)?
+            .AbsolutePath ?? FileSystem.AppDataDirectory;
+#else
+        return FileSystem.AppDataDirectory;
+#endif
+    }
 }

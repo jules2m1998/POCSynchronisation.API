@@ -1,4 +1,4 @@
-﻿using Infrastructure.Dapper.Services.Abstractions;
+﻿using Poc.Synchronisation.Domain.Abstractions;
 
 namespace POCSync.MAUI.Services;
 
