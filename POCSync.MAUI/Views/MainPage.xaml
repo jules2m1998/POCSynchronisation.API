@@ -47,6 +47,12 @@
                                        StrokeThickness="1" 
                                        StrokeShape="RoundRectangle 8,8,8,8"
                                        Stroke="{AppThemeBinding Light=LightGray, Dark=DimGray}">
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding IsConflicted}" Value="True">
+                                            <Setter Property="Stroke" Value="Red" />
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    
                                     <Grid Padding="0" ColumnDefinitions="125,*">
                                         <Image Source="{Binding FirstImage}"
                                              Aspect="AspectFill"

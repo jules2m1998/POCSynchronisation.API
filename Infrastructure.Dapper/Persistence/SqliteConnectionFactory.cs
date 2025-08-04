@@ -94,20 +94,9 @@ public class SqliteConnectionFactory : IDbConnectionFactory, IDisposable
 
     public void CleanDb()
     {
-        using var connection = CreateConnection();
-        connection.Open();
-        const string sql = "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'";
-
-        // For SQLite
-        var tables = connection.Query<string>(sql);
-
-        connection.Execute("PRAGMA foreign_keys = OFF");
-
-        foreach (var table in tables)
+        if (File.Exists(_dbPath))
         {
-            connection.Execute($"DROP TABLE IF EXISTS [{table}]");
+            File.Delete(_dbPath);
         }
-
-        connection.Execute("PRAGMA foreign_keys = ON");
     }
 }

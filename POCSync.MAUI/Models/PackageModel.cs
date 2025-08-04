@@ -8,6 +8,7 @@ public class PackageModel
     public decimal? Volume { get; set; }
     public decimal? TareWeight { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsConflicted { get; set; } = false;
 
     public ICollection<ImageModel> Images { get; set; } = [];
 

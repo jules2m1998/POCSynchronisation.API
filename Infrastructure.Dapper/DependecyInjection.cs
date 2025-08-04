@@ -1,4 +1,5 @@
-﻿using Infrastructure.Dapper.Services;
+﻿using Infrastructure.Dapper.DataConflictsReconcilers;
+using Infrastructure.Dapper.Services;
 using Infrastructure.Dapper.Services.EventIdUpdaters;
 using Infrastructure.Dapper.Services.Generated;
 using Poc.Synchronisation.Domain.Abstractions.Repositories;
@@ -30,6 +31,8 @@ public static class DependecyInjection
         services.AddScoped<IModelInitialiser, UserRepository>();
         services.AddScoped<IModelInitialiser, PackageDocumentRepository>();
         services.AddScoped<IModelInitialiser, DocumentRepository>();
+
+        services.AddScoped<IConflictReconciler, PackageConflictReconciler>();
 
 
         services.AddScoped<IEventIdUpdater, CreatePackageIdUpdater>();

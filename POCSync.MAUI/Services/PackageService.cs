@@ -95,10 +95,6 @@ public class PackageService(
         ICollection<PackageModel> models = []; ;
         foreach (var package in result)
         {
-            if (package.ConflictOfId != null)
-            {
-                continue;
-            }
             var model = await MapToPackageModel(package);
             models.Add(model);
         }
@@ -173,7 +169,8 @@ public class PackageService(
             Weight = package.Weight,
             Volume = package.Volume,
             TareWeight = package.TareWeight,
-            Images = images.Where(x => x != null).ToList()!
+            Images = images.Where(x => x != null).ToList()!,
+            IsConflicted = package.ConflictOfId.HasValue,
         };
     }
 }

@@ -31,11 +31,13 @@ public partial class SynchronisationViewModel(
         IDbConnectionFactory db,
         ILogger<SynchronisationViewModel> logger,
         IEnumerable<IEventIdUpdater> IdUpdaters,
+        IEnumerable<IConflictReconciler> conflictReconcilers,
         IFileTransferService fileTransferService,
         IDBForeignKeyMode keyMod,
         DatabaseInitializer _databaseInitializer,
         SynchronisationService synchronisationService,
-        IAppGuards appGuards
+        IAppGuards appGuards,
+        IPermissionManger permissionManger
     ) : BaseViewModel
 {
     [ObservableProperty]
@@ -147,7 +149,6 @@ public partial class SynchronisationViewModel(
     async Task Retrieve()
     {
         IsBusy = true;
-
         SynchroSteps.Clear();
         var stopwatch = Stopwatch.StartNew();
         logger.LogInformation("Starting data retrieval process");
@@ -157,6 +158,9 @@ public partial class SynchronisationViewModel(
         SynchroSteps.Add(initStep);
         try
         {
+
+            var permissionGranted = await permissionManger.CheckAndRequestStoragePermission();
+            if (!permissionGranted) return;
             db.CleanDb();
             UpdateStep(initStep, "Base nettoyée", 0.4);
 
@@ -312,10 +316,10 @@ public partial class SynchronisationViewModel(
     [RelayCommand]
     async Task Synchronise()
     {
+        IsBusy = true;
         SynchroSteps.Clear();
         logger.LogInformation("Starting synchronization process for user {UserId}", user?.Id);
         var stopwatch = Stopwatch.StartNew();
-        IsBusy = true;
 
         try
         {
@@ -530,6 +534,8 @@ public partial class SynchronisationViewModel(
             SynchroSteps.Add(getEventsStep);
 
             var events = (await storeEventRepo.GetAllAsync()).ToArray();
+
+
             Report.TotalEventToSync = events.Length;
             Report.TotalEventSynced = 0;
 
@@ -564,6 +570,32 @@ public partial class SynchronisationViewModel(
                 logger.LogDebug("Sending batch {Batch}/{Total}", iteration, totalBatches);
                 var response = await api.Synchronisation(request);
                 logger.LogDebug("Received server response");
+
+                var conflictEvents = response?.Results?
+                .Where(e => e.EventStatus == SynchronisedStoredEventDtoEventStatus.Conflict)
+                .ToList() ?? [];
+
+                if (conflictEvents.Count > 0)
+                {
+                    foreach (var conflictEvent in conflictEvents)
+                    {
+                        var e = conflictEvent.Adapt<StoredEvent>();
+                        var reconciler = conflictReconcilers
+                            .FirstOrDefault(r => r.CanReconcileConflict(e));
+
+                        if (reconciler is not null)
+                        {
+                            logger.LogInformation("Reconciliating conflict event {EventId}", conflictEvent.EventId);
+                            await reconciler.ReconciliateAsync(e);
+                        }
+                        else
+                        {
+                            logger.LogWarning("No reconciler found for conflict event {EventId}", conflictEvent.EventId);
+                            throw new InvalidOperationException(
+                                $"No conflict reconciler found for event {conflictEvent.EventId}");
+                        }
+                    }
+                }
 
                 var createdEvents = response?.Results?
                     .Where(x => x.EventType.StartsWith("create", StringComparison.OrdinalIgnoreCase))

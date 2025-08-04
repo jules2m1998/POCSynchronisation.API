@@ -9,6 +9,15 @@
     
     <ScrollView>
         <VerticalStackLayout Spacing="10" Padding="20">
+
+
+            <Button 
+                    Text="Start synchronisation" 
+                    Command="{Binding SynchroniseCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    IsVisible="{Binding IsNotInitialisation}"
+                    HorizontalOptions="Center"
+                    Margin="8"/>
             <VerticalStackLayout IsVisible="{Binding IsThereSomethingToSync}">
                 <Border
                     Stroke="{AppThemeBinding Light=Gray, Dark=DarkGray}"
@@ -68,14 +77,6 @@
                     Command="{Binding RetrieveCommand}"
                     IsEnabled="{Binding IsNotBusy}"
                     IsVisible="{Binding IsInitialisation}"
-                    HorizontalOptions="Center"
-                    Margin="8"/>
-
-                <Button 
-                    Text="Start synchronisation" 
-                    Command="{Binding SynchroniseCommand}"
-                    IsEnabled="{Binding IsNotBusy}"
-                    IsVisible="{Binding IsNotInitialisation}"
                     HorizontalOptions="Center"
                     Margin="8"/>
 

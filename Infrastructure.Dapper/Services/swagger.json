@@ -7,7 +7,9 @@
   "paths": {
     "/api/Files/upload": {
       "post": {
-        "tags": ["Files"],
+        "tags": [
+          "Files"
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {
@@ -83,7 +85,9 @@
     },
     "/api/Synchronisation": {
       "post": {
-        "tags": ["Synchronisation"],
+        "tags": [
+          "Synchronisation"
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -132,7 +136,9 @@
     },
     "/api/Synchronisation/retrieve": {
       "get": {
-        "tags": ["Synchronisation"],
+        "tags": [
+          "Synchronisation"
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -152,7 +158,9 @@
     },
     "/api/Synchronisation/NonSyncedEvents/{lastSyncedId}/{userId}": {
       "get": {
-        "tags": ["Synchronisation"],
+        "tags": [
+          "Synchronisation"
+        ],
         "parameters": [
           {
             "name": "lastSyncedId",
@@ -192,7 +200,9 @@
     },
     "/api/Synchronisation/LastSavedEventId/{userId}": {
       "get": {
-        "tags": ["Synchronisation"],
+        "tags": [
+          "Synchronisation"
+        ],
         "parameters": [
           {
             "name": "userId",
@@ -264,9 +274,19 @@
             "format": "uuid"
           },
           "eventStatus": {
-            "enum": ["Idle", "Success", "Error", "Conflict"],
+            "enum": [
+              "Idle",
+              "Success",
+              "Error",
+              "Conflict"
+            ],
             "type": "string",
-            "x-enumNames": ["Idle", "Success", "Error", "Conflict"]
+            "x-enumNames": [
+              "Idle",
+              "Success",
+              "Error",
+              "Conflict"
+            ]
           },
           "emitedOn": {
             "type": "string",
@@ -279,6 +299,10 @@
           "lastSyncEvent": {
             "type": "string",
             "format": "uuid"
+          },
+          "metadata": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -386,9 +410,19 @@
             "format": "uuid"
           },
           "eventStatus": {
-            "enum": ["Idle", "Success", "Error", "Conflict"],
+            "enum": [
+              "Idle",
+              "Success",
+              "Error",
+              "Conflict"
+            ],
             "type": "string",
-            "x-enumNames": ["Idle", "Success", "Error", "Conflict"]
+            "x-enumNames": [
+              "Idle",
+              "Success",
+              "Error",
+              "Conflict"
+            ]
           },
           "emitedOn": {
             "type": "string",
@@ -405,6 +439,9 @@
           "metadata": {
             "type": "string",
             "nullable": true
+          },
+          "eventConflict": {
+            "$ref": "#/components/schemas/SynchronisedStoredEventDto"
           }
         },
         "additionalProperties": false
