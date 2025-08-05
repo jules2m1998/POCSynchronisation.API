@@ -18,6 +18,14 @@
                     IsVisible="{Binding IsNotInitialisation}"
                     HorizontalOptions="Center"
                     Margin="8"/>
+
+            <Button 
+                Text="Stop synchronisation" 
+                Command="{Binding CancelCommand}"
+                IsVisible="{Binding IsNotInitialisation}"
+                HorizontalOptions="Center"
+                Margin="8"/>
+            
             <VerticalStackLayout IsVisible="{Binding IsThereSomethingToSync}">
                 <Border
                     Stroke="{AppThemeBinding Light=Gray, Dark=DarkGray}"
@@ -80,9 +88,9 @@
                     HorizontalOptions="Center"
                     Margin="8"/>
 
-                <Label 
+                <!--<Label 
                     Text="{Binding StoredEventJson}" 
-                    HorizontalOptions="Center" />
+                    HorizontalOptions="Center" />-->
 
 
             </VerticalStackLayout>

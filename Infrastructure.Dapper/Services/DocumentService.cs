@@ -5,6 +5,7 @@ using Poc.Synchronisation.Domain.Abstractions.Services;
 using Poc.Synchronisation.Domain.Types;
 using System.Data;
 using System.Net;
+using System.Runtime.CompilerServices;
 
 namespace Infrastructure.Dapper.Services;
 
@@ -152,14 +153,14 @@ public class DocumentService(
     public string GetBaseUrl() => _basePath;
 
     //public async IAsyncEnumerable<(string description, double progress, bool isNewStep, string? stepTitle, int? total)> UploadFiles()
-    public async IAsyncEnumerable<UploadFilesStepModel> UploadFiles()
+    public async IAsyncEnumerable<UploadFilesStepModel> UploadFiles([EnumeratorCancellation] CancellationToken cancellation = default)
     {
-        // STEP 1: FETCH FILES
+        cancellation.ThrowIfCancellationRequested();
         yield return UploadFilesStepModel.CreateSuccess("Initialisation de la récupération des fichiers à uploader...", 0.0, true, "Récupération des fichiers", null);
 
+        cancellation.ThrowIfCancellationRequested();
         var connection = dbConnectionFactory.CreateConnection();
         var nonSyncedFiles = (await connection.QueryAsync<string>(sqlGetAllNonSyncFilePaths)).ToArray();
-
         var totalFiles = nonSyncedFiles.Length;
 
         if (totalFiles == 0)
@@ -169,9 +170,6 @@ public class DocumentService(
         }
 
         yield return UploadFilesStepModel.CreateSuccess($"📁 {totalFiles} fichier(s) à uploader récupéré(s).", 1.0, false, null, totalFiles);
-
-
-        // STEP 2: UPLOAD FILES
         yield return UploadFilesStepModel.CreateSuccess("Début de l'upload des fichiers vers le serveur...", 0.0, true, "Upload des fichiers", null);
 
         var failure = new List<string>();
@@ -180,10 +178,12 @@ public class DocumentService(
         int index = 0;
         foreach (var url in nonSyncedFiles)
         {
+            cancellation.ThrowIfCancellationRequested();
+
             var path = Path.Combine(_basePath, url);
-            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            if (!File.Exists(path))
             {
-                _logger.LogWarning("Fichier introuvable ou chemin invalide : {Path}", path);
+                _logger.LogWarning("Fichier introuvable : {Path}", path);
                 failure.Add(url);
                 yield return UploadFilesStepModel.CreateError("", $"❌ Fichier introuvable : {url}", (double)index / totalFiles);
                 index++;
@@ -191,36 +191,30 @@ public class DocumentService(
             }
 
             using var fileStream = new FileStream(path, FileMode.Open, FileAccess.Read);
-            var fileName = Path.GetFileName(path);
-            var streamPart = new StreamPart(fileStream, fileName, "application/octet-stream");
+            var streamPart = new StreamPart(fileStream, Path.GetFileName(path), "application/octet-stream");
 
-            var directory = Path.GetDirectoryName(url);
-            var folders = directory?.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries) ?? [];
+            var folders = Path.GetDirectoryName(url)?.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries) ?? [];
 
             var result = await api.Upload(streamPart, folders);
             if (!result.Success)
             {
                 failure.Add(url);
-                yield return UploadFilesStepModel.CreateError("", $"❌ Échec de l'upload : {fileName}", (double)index / totalFiles);
+                yield return UploadFilesStepModel.CreateError("", $"❌ Échec de l'upload : {Path.GetFileName(path)}", (double)index / totalFiles);
                 index++;
                 continue;
             }
 
-            var update = await connection.ExecuteAsync(
-                sqlUpdateDocumentSyncStatus,
-                new { StorageUrl = url }
-            );
-
+            var update = await connection.ExecuteAsync(sqlUpdateDocumentSyncStatus, new { StorageUrl = url });
             if (update == 0)
             {
-                _logger.LogWarning("Échec de la mise à jour du statut de synchronisation pour : {Path}", path);
+                _logger.LogWarning("Échec de la mise à jour : {Path}", path);
                 failure.Add(url);
-                yield return UploadFilesStepModel.CreateError("", $"❌ Upload réussi mais mise à jour échouée : {fileName}", (double)index / totalFiles);
+                yield return UploadFilesStepModel.CreateError("", $"❌ Upload réussi mais mise à jour échouée : {Path.GetFileName(path)}", (double)index / totalFiles);
             }
             else
             {
                 success.Add(url);
-                yield return UploadFilesStepModel.CreateSuccess($"✅ {fileName} uploadé avec succès", (double)index / totalFiles, false, null, null, 1);
+                yield return UploadFilesStepModel.CreateSuccess($"✅ {Path.GetFileName(path)} uploadé avec succès", (double)index / totalFiles, false, null, null, 1);
             }
 
             index++;
@@ -245,8 +239,10 @@ public class DocumentService(
         }
     }
 
-    public async IAsyncEnumerable<DownloadFilesStep> DownloadFiles()
+    public async IAsyncEnumerable<DownloadFilesStep> DownloadFiles([EnumeratorCancellation] CancellationToken cancellation = default)
     {
+        cancellation.ThrowIfCancellationRequested();
+
         var permissionGranted = await permissionManger.CheckAndRequestStoragePermission();
         if (!permissionGranted)
         {
@@ -256,6 +252,8 @@ public class DocumentService(
                 1.0);
             yield break;
         }
+
+        cancellation.ThrowIfCancellationRequested();
 
         string[] nonSyncedFiles = [];
         IDbConnection connection;
@@ -280,6 +278,8 @@ public class DocumentService(
             yield break;
         }
 
+        cancellation.ThrowIfCancellationRequested();
+
         if (nonSyncedFiles.Length == 0)
         {
             yield return DownloadFilesStep.CreateSuccess("Aucun fichier à télécharger 📂", 1.0);
@@ -293,6 +293,8 @@ public class DocumentService(
 
         foreach (var path in nonSyncedFiles)
         {
+            cancellation.ThrowIfCancellationRequested();
+
             string fileName = Path.GetFileName(path);
             string fullPath = Path.Combine(_basePath, path);
             string? directory = Path.GetDirectoryName(fullPath);
@@ -303,7 +305,9 @@ public class DocumentService(
 
             try
             {
-                using var response = await fileClient.GetAsync(path);
+                using var response = await fileClient.GetAsync(path, cancellation);
+
+                cancellation.ThrowIfCancellationRequested();
 
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
@@ -320,7 +324,9 @@ public class DocumentService(
                         Directory.CreateDirectory(directory);
 
                     using var stream = File.OpenWrite(fullPath);
-                    await response.Content.CopyToAsync(stream);
+                    await response.Content.CopyToAsync(stream, cancellation);
+
+                    cancellation.ThrowIfCancellationRequested();
 
                     var updated = await connection.ExecuteAsync(
                         sqlUpdateDocumentSyncStatus,
@@ -363,9 +369,10 @@ public class DocumentService(
             }
         }
 
+        cancellation.ThrowIfCancellationRequested();
+
         yield return DownloadFilesStep.CreateSuccess("📥 Téléchargement terminé", 1.0);
     }
-
 
     #endregion
 }

@@ -36,7 +36,6 @@ namespace POCSync.MAUI
 #if DEBUG
             builder.Logging.AddDebug();
 #endif
-            SQLitePCL.Batteries_V2.Init();
 
             var dbName = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
             var dbPwd = builder.Configuration["DbPwd"] ?? string.Empty;

@@ -1,15 +1,14 @@
-﻿
-
-using Infrastructure.Dapper.Abstractions;
+﻿using Poc.Synchronisation.Domain.Abstractions.Services;
 using Poc.Synchronisation.Domain.Events.Packages;
 using static Dapper.SqlMapper;
 
 namespace Infrastructure.Dapper.Services.EventIdUpdaters;
 
-public class CreatePackageIdUpdater(IDbConnectionFactory dbConnectionFactory) : IEventIdUpdater
+public class CreatePackageIdUpdater(IDbConnectionFactory dbConnectionFactory, IDBForeignKeyMode dBForeignKey) : IEventIdUpdater
 {
     public async Task<IReadOnlyCollection<StoredEvent>> UpdateEventId(IReadOnlyCollection<StoredEvent> events)
     {
+        await dBForeignKey.On();
         var packageEvents = events.Where(x => x.EventType == nameof(CreatePackageEvent))
             .ToList();
         if (packageEvents.Count == 0) return [];
@@ -37,8 +36,13 @@ public class CreatePackageIdUpdater(IDbConnectionFactory dbConnectionFactory) : 
             {
                 item.MobileEventId = item.ElementId;
             }
+
+            await connection.ExecuteAsync("UPDATE PackageDocuments SET PackageId = @newPackageId WHERE PackageId = @oldPackageId",
+            new { newPackageId = item.ElementId, oldPackageId = item.MobileEventId });
             result.Add(item);
         }
+
+        await dBForeignKey.Off();
 
         return result;
     }

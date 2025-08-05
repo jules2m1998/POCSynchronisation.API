@@ -50,7 +50,7 @@ public class BaserRepository<TEntity, TId>(IDbConnectionFactory dbConnectionFact
         return GetAllAsync().Result.AsQueryable();
     }
 
-    public async Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
+    public virtual async Task<bool> UpdateAsync(TEntity entity, CancellationToken cancellationToken = default)
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         var result = await connection.UpdateAsync(entity, cancellationToken: cancellationToken);

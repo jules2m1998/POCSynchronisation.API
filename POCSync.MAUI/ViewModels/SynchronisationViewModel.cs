@@ -74,6 +74,9 @@ public partial class SynchronisationViewModel(
     [ObservableProperty]
     bool isInitialised = false;
 
+    CancellationTokenSource source = new();
+    private CancellationToken cancellationToken => source.Token;
+
     public bool IsNotInitialisation => !IsInitialisation;
 
     private User? user { get; set; }
@@ -287,7 +290,7 @@ public partial class SynchronisationViewModel(
         var step2 = CreateStep("Téléchargement des fichiers du serveur", "Initialisation du téléchargement...", 0.1);
         SynchroSteps.Add(step2);
 
-        await foreach (var syncInfo in fileTransferService.DownloadFiles())
+        await foreach (var syncInfo in fileTransferService.DownloadFiles(cancellationToken))
         {
             if (syncInfo.Total.HasValue)
             {
@@ -347,6 +350,15 @@ public partial class SynchronisationViewModel(
             await PushFilesAsync();
             await DownloadFolders();
         }
+        catch (OperationCanceledException)
+        {
+            var lastStep = SynchroSteps.LastOrDefault();
+            if (lastStep is not null)
+            {
+                lastStep.Progress = 1.0;
+                lastStep.Errors.Add("Operation annulee.");
+            }
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error during synchronization process");
@@ -373,39 +385,6 @@ public partial class SynchronisationViewModel(
             logger.LogInformation("Synchronization completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
             await Initialisation();
         }
-    }
-
-    private async Task PushFilesAsync()
-    {
-        var currentStep = new SynchroStep
-        {
-            Step = "",
-            Description = "",
-            Progress = 0.0,
-            IsSuccess = false
-        };
-        await foreach (var line in fileTransferService.UploadFiles())
-        {
-            if (line.Total.HasValue)
-            {
-                Report.TotalDocumentToSync += line.Total.Value;
-            }
-            if (line.SyncedFileCount > 0)
-            {
-                Report.TotalDocumentSynced += line.SyncedFileCount;
-            }
-
-            if (line.IsNewStep && line.StepTitle != null)
-            {
-                currentStep.IsSuccess = true;
-                currentStep = CreateStep(line.StepTitle, line.Description, line.Progress);
-                SynchroSteps.Add(currentStep);
-                continue;
-            }
-            currentStep.Description = line.Description;
-            currentStep.Progress = line.Progress;
-        }
-        currentStep.IsSuccess = true;
     }
 
     [RelayCommand]
@@ -447,12 +426,21 @@ public partial class SynchronisationViewModel(
         }
     }
 
+    [RelayCommand]
+    async Task OnCancel()
+    {
+        source.Cancel();
+    }
+
     private async Task ApplyEventAsync(ICollection<StoredEvent> eventsToSync)
     {
         logger.LogInformation("Starting to apply {EventCount} events", eventsToSync.Count);
         var stopwatch = Stopwatch.StartNew();
         var lastEventId = user?.LastEventSynced;
         var processedEvents = 0;
+
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -461,6 +449,7 @@ public partial class SynchronisationViewModel(
 
             foreach (var batch in eventsToSync.Batch(10))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var batchList = batch.ToList();
                 logger.LogDebug("Processing batch {BatchNumber} with {BatchSize} events", iteration + 1, batchList.Count);
 
@@ -488,6 +477,12 @@ public partial class SynchronisationViewModel(
             ProgressTitle = "Saving ended";
             logger.LogInformation("Successfully applied {ProcessedEvents}/{TotalEvents} events", processedEvents, eventsToSync.Count);
         }
+        catch (OperationCanceledException)
+        {
+            logger.LogWarning("Event application was cancelled by user");
+            await ApplyLastEventSyncAsync(stopwatch, lastEventId);
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Error applying events. Processed {ProcessedEvents}/{TotalEvents}",
@@ -495,24 +490,29 @@ public partial class SynchronisationViewModel(
         }
         finally
         {
-            if (user is not null && lastEventId is not null)
-            {
-                user.LastEventSynced = lastEventId ?? Guid.Empty;
-                user.IsInitialised = true;
-
-                await userRepo.UpdateAsync(user);
-                logger.LogInformation("Updated user {UserId} with LastEventSynced: {LastEventId}",
-                    user.Id, lastEventId);
-            }
-            else
-            {
-                logger.LogWarning("Cannot update user: User={UserNull}, LastEventId={EventIdNull}",
-                    user is null, lastEventId is null);
-            }
-
-            stopwatch.Stop();
-            logger.LogInformation("ApplyEventAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
+            await ApplyLastEventSyncAsync(stopwatch, lastEventId);
         }
+    }
+
+    private async Task ApplyLastEventSyncAsync(Stopwatch stopwatch, Guid? lastEventId)
+    {
+        if (user is not null && lastEventId is not null)
+        {
+            user.LastEventSynced = lastEventId ?? Guid.Empty;
+            user.IsInitialised = true;
+
+            await userRepo.UpdateAsync(user);
+            logger.LogInformation("Updated user {UserId} with LastEventSynced: {LastEventId}",
+                user.Id, lastEventId);
+        }
+        else
+        {
+            logger.LogWarning("Cannot update user: User={UserNull}, LastEventId={EventIdNull}",
+                user is null, lastEventId is null);
+        }
+
+        stopwatch.Stop();
+        logger.LogInformation("ApplyEventAsync completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
     }
 
     private async Task SendEventsAsync()
@@ -523,6 +523,7 @@ public partial class SynchronisationViewModel(
         var resultEvents = new List<StoredEvent>();
         var deletedEvents = 0;
         var processedBatches = 0;
+        cancellationToken.ThrowIfCancellationRequested();
 
         try
         {
@@ -557,6 +558,7 @@ public partial class SynchronisationViewModel(
 
             foreach (var batch in events.Batch(batchSize))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 iteration++;
                 var dtoBatch = batch.Select(e =>
                 {
@@ -625,6 +627,11 @@ public partial class SynchronisationViewModel(
             UpdateStep(sendStep, "📁 Données envoyées avec succès ✅", 1.0, isSuccess: true);
             logger.LogInformation("📤 Sent {ProcessedBatches} batches, deleted {DeletedEvents} events", processedBatches, deletedEvents);
         }
+        catch (OperationCanceledException ex)
+        {
+            await Recon(resultEvents);
+            throw new OperationCanceledException("Synchronisation cancelled by user", ex);
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Erreur pendant la synchronisation des événements");
@@ -635,23 +642,7 @@ public partial class SynchronisationViewModel(
         // Step 3: Reconciliation
         try
         {
-            var reconciliationStep = CreateStep("Réconciliation des données serveur", "En cours...", 0.0);
-            SynchroSteps.Add(reconciliationStep);
-
-            var index = 0;
-            var count = IdUpdaters.Count();
-
-            foreach (var updater in IdUpdaters)
-            {
-                var result = await updater.UpdateEventId(resultEvents);
-                index++;
-                var progress = (double)index / count;
-                UpdateStep(reconciliationStep, $"Réconciliation: {Math.Round(progress * 100)}%", progress);
-                logger.LogDebug("Updater {Type} finished: {Result}", updater.GetType().Name, result);
-            }
-
-            UpdateStep(reconciliationStep, "🤝 Réconciliation terminée ✅", 1.0, isSuccess: true);
-            logger.LogInformation("✅ Event ID update completed");
+            await Recon(resultEvents);
         }
         catch (Exception ex)
         {
@@ -663,6 +654,27 @@ public partial class SynchronisationViewModel(
             logger.LogInformation("✅ SendEventsAsync terminé en {Elapsed}ms", stopwatch.ElapsedMilliseconds);
             IsBusy = false;
         }
+    }
+
+    private async Task Recon(List<StoredEvent> resultEvents)
+    {
+        var reconciliationStep = CreateStep("Réconciliation des données serveur", "En cours...", 0.0);
+        SynchroSteps.Add(reconciliationStep);
+
+        var index = 0;
+        var count = IdUpdaters.Count();
+
+        foreach (var updater in IdUpdaters)
+        {
+            var result = await updater.UpdateEventId(resultEvents);
+            index++;
+            var progress = (double)index / count;
+            UpdateStep(reconciliationStep, $"Réconciliation: {Math.Round(progress * 100)}%", progress);
+            logger.LogDebug("Updater {Type} finished: {Result}", updater.GetType().Name, result);
+        }
+
+        UpdateStep(reconciliationStep, "🤝 Réconciliation terminée ✅", 1.0, isSuccess: true);
+        logger.LogInformation("✅ Event ID update completed");
     }
 
     private static SynchroStep CreateStep(string step, string description, double progress) =>
@@ -691,5 +703,38 @@ public partial class SynchronisationViewModel(
         {
             step.Errors.Add(error);
         }
+    }
+
+    private async Task PushFilesAsync()
+    {
+        var currentStep = new SynchroStep
+        {
+            Step = "",
+            Description = "",
+            Progress = 0.0,
+            IsSuccess = false
+        };
+        await foreach (var line in fileTransferService.UploadFiles(cancellationToken))
+        {
+            if (line.Total.HasValue)
+            {
+                Report.TotalDocumentToSync += line.Total.Value;
+            }
+            if (line.SyncedFileCount > 0)
+            {
+                Report.TotalDocumentSynced += line.SyncedFileCount;
+            }
+
+            if (line.IsNewStep && line.StepTitle != null)
+            {
+                currentStep.IsSuccess = true;
+                currentStep = CreateStep(line.StepTitle, line.Description, line.Progress);
+                SynchroSteps.Add(currentStep);
+                continue;
+            }
+            currentStep.Description = line.Description;
+            currentStep.Progress = line.Progress;
+        }
+        currentStep.IsSuccess = true;
     }
 }

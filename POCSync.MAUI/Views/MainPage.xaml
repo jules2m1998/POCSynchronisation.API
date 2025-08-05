@@ -24,7 +24,7 @@
                 EmptyView="No packages found">
                 <CollectionView.ItemTemplate>
                     <DataTemplate x:DataType="modelLocal:PackageModel">
-                        <SwipeView>
+                        <SwipeView IsEnabled="{Binding IsNotConflicted}">
                             <SwipeView.LeftItems>
                                 <SwipeItems>
                                     <SwipeItem Text="Edit"
@@ -63,18 +63,11 @@
                                             VerticalOptions="Center"
                                             Grid.Column="1"
                                             Padding="10">
-                                            <Label Style="{StaticResource LargeLabel}" Text="{Binding Reference}" />
-                                            <Label Style="{StaticResource MediumLabel}" 
-                                                  Text="{Binding Weight, StringFormat='Weight: {0:F2} kg'}"
-                                                  IsVisible="{Binding Weight, Converter={StaticResource NotNullConverter}}" />
-                                            <Label Style="{StaticResource MediumLabel}" 
-                                                  Text="{Binding Volume, StringFormat='Volume: {0:F2} m³'}"
-                                                  IsVisible="{Binding Volume, Converter={StaticResource NotNullConverter}}" />
-                                            <Label Style="{StaticResource MediumLabel}" 
-                                                  Text="{Binding TareWeight, StringFormat='Tare: {0:F2} kg'}"
-                                                  IsVisible="{Binding TareWeight, Converter={StaticResource NotNullConverter}}" />
-                                            <Label Style="{StaticResource MediumLabel}" 
-                                                  Text="{Binding CreatedAt, StringFormat='Created: {0:MM/dd/yyyy}'}" />
+                                            <Label Text="{Binding Reference}" />
+                                            <Label Text="{Binding Weight, StringFormat='Weight: {0:F2} kg'}" />
+                                            <Label Text="{Binding Volume, StringFormat='Volume: {0:F2} m³'}" />
+                                            <Label Text="{Binding TareWeight, StringFormat='Tare: {0:F2} kg'}" />
+                                            <Label Text="{Binding CreatedAt, StringFormat='Created: {0:MM/dd/yyyy}'}" />
                                         </VerticalStackLayout>
                                     </Grid>
                                 </Border>

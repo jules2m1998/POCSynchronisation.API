@@ -9,6 +9,7 @@ public class PackageModel
     public decimal? TareWeight { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsConflicted { get; set; } = false;
+    public bool IsNotConflicted => !IsConflicted;
 
     public ICollection<ImageModel> Images { get; set; } = [];
 

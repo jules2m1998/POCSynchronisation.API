@@ -10,14 +10,14 @@
     <PackageReference Include="Bogus" Version="35.6.3" />
     <PackageReference Include="Dapper" Version="2.1.66" />
     <PackageReference Include="Dommel" Version="3.3.4" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Mapster" Version="7.4.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="6.0.25" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4" />
     <PackageReference Include="Refit" Version="8.0.0" />
     <PackageReference Include="Refit.HttpClientFactory" Version="8.0.0" />
     <PackageReference Include="Refitter.SourceGenerator" Version="1.5.5">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="SQLitePCLRaw.bundle_sqlcipher" Version="1.1.14" />
   </ItemGroup>
 
 	<ItemGroup>
